@@ -175,8 +175,8 @@ public class ByteBin {
 
         this.contentPath = Paths.get("content");
         this.lifetime = config.get("lifetime").getAsLong();
-        this.host = config.get("host").getAsString();
-        this.port = config.get("port").getAsInt();
+        this.host = System.getProperty("server.host", config.get("host").getAsString());
+        this.port = Integer.getInteger("server.port", config.get("port").getAsInt());
     }
 
     public void setup() throws Exception {
