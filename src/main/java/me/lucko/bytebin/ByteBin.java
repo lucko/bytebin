@@ -189,6 +189,14 @@ public class ByteBin {
         My.errorHandler((req, resp, error) -> STANDARD_RESPONSE.apply(resp).code(404).plain("Invalid path"));
 
         // define upload path
+        On.options("/post").serve(req -> req.response()
+                .header("Access-Control-Allow-Origin", "*")
+                .header("Access-Control-Allow-Methods", "POST")
+                .header("Access-Control-Max-Age", "86400")
+                .header("Access-Control-Allow-Headers", "Content-Type")
+                .code(200)
+                .body(new byte[0])
+        );
         On.post("/post").serve(req -> {
             byte[] content = req.body();
             if (content.length == 0) {
@@ -216,12 +224,15 @@ public class ByteBin {
         });
 
         // catch all
-        On.any("/*").cacheCapacity(0).serve(req -> {
-            // we only accept get requests
-            if (!req.verb().equals("GET")) {
-                return STANDARD_RESPONSE.apply(req.response()).code(400).plain("Bad request");
-            }
-
+        On.options("/*").serve(req -> req.response()
+                .header("Access-Control-Allow-Origin", "*")
+                .header("Access-Control-Allow-Methods", "GET")
+                .header("Access-Control-Max-Age", "86400")
+                .header("Access-Control-Allow-Headers", "Content-Type")
+                .code(200)
+                .body(new byte[0])
+        );
+        On.get("/*").cacheCapacity(0).serve(req -> {
             // get the requested path
             String path = req.path().substring(1);
             if (path.trim().isEmpty() || path.contains(".") || INVALID_TOKEN_PATTERN.matcher(path).find()) {
