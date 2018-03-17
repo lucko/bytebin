@@ -28,6 +28,7 @@ package me.lucko.bytebin;
 import com.github.benmanes.caffeine.cache.AsyncLoadingCache;
 import com.github.benmanes.caffeine.cache.CacheLoader;
 import com.github.benmanes.caffeine.cache.Caffeine;
+import com.github.benmanes.caffeine.cache.LoadingCache;
 import com.github.benmanes.caffeine.cache.Weigher;
 import com.google.common.base.Preconditions;
 import com.google.common.io.ByteArrayDataInput;
@@ -35,17 +36,19 @@ import com.google.common.io.ByteArrayDataOutput;
 import com.google.common.io.ByteStreams;
 import com.google.common.util.concurrent.ThreadFactoryBuilder;
 import com.google.gson.Gson;
-import com.google.gson.GsonBuilder;
+import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 
 import org.rapidoid.http.MediaType;
+import org.rapidoid.http.Req;
 import org.rapidoid.http.Resp;
 import org.rapidoid.setup.My;
 import org.rapidoid.setup.On;
 import org.rapidoid.u.U;
 
 import java.io.BufferedReader;
-import java.io.BufferedWriter;
+import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.FileAlreadyExistsException;
@@ -55,10 +58,13 @@ import java.nio.file.Paths;
 import java.nio.file.StandardOpenOption;
 import java.security.SecureRandom;
 import java.text.DateFormat;
+import java.util.Arrays;
 import java.util.Date;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Function;
 import java.util.logging.ConsoleHandler;
 import java.util.logging.Formatter;
@@ -67,44 +73,57 @@ import java.util.logging.LogRecord;
 import java.util.logging.Logger;
 import java.util.regex.Pattern;
 import java.util.stream.Stream;
+import java.util.zip.GZIPInputStream;
+import java.util.zip.GZIPOutputStream;
 
 /**
- * stupidly simple "pastebin" service.
+ * Stupidly simple "pastebin" service.
  */
 public class ByteBin {
 
     // Bootstrap
     public static void main(String[] args) {
         try {
-            new ByteBin().setup();
+            new ByteBin();
         } catch (Exception e) {
             e.printStackTrace();
         }
     }
 
+    /** Empty byte array */
     private static final byte[] EMPTY_BYTES = new byte[0];
-    private static final Content NULL_CONTENT = new Content(null, MediaType.TEXT_PLAIN, Long.MAX_VALUE, EMPTY_BYTES);
 
-    // matches invalid tokens
-    private static final Pattern INVALID_TOKEN_PATTERN = Pattern.compile("[^a-zA-Z0-9]");
+    /** Empty content instance */
+    private static final Content EMPTY_CONTENT = new Content(null, MediaType.TEXT_PLAIN, Long.MAX_VALUE, EMPTY_BYTES);
 
-    // number of bytes in a megabyte
+    /** Number of bytes in a megabyte */
     private static final long MEGABYTE_LENGTH = 1024L * 1024L;
 
-    // always add the CORS header
+    /** Standard response function. (always add the CORS header)*/
     private static final Function<Resp, Resp> STANDARD_RESPONSE = resp -> resp.header("Access-Control-Allow-Origin", "*");
 
-    // bytebin logger instance
+    /** Logger instance */
     private final Logger logger;
 
-    // executor service for performing file based i/o
+    /** Executor service for performing file based i/o */
     private final ScheduledExecutorService executor;
-    // content cache - caches the raw byte data for the last x requested files
-    private final AsyncLoadingCache<String, Content> contentCache;
-    // instance responsible for loading data from the filesystem
-    private final Loader loader;
 
-    // generates content tokens
+    /** Content cache - caches the raw byte data for the last x requested files */
+    private final AsyncLoadingCache<String, Content> contentCache;
+
+    /** Post rate limiter cache */
+    private final RateLimiter postRateLimiter;
+
+    /** Read rate limiter */
+    private final RateLimiter readRateLimiter;
+
+    /** The max content length in mb */
+    private final long maxContentLength;
+
+    /** Instance responsible for loading data from the filesystem */
+    private final ContentLoader loader;
+
+    /** Token generator */
     private final TokenGenerator tokenGenerator;
 
     // the path to store the content in
@@ -118,9 +137,167 @@ public class ByteBin {
 
     public ByteBin() throws Exception {
         // setup simple logger
-        this.logger = Logger.getLogger("bytebin");
-        this.logger.setLevel(Level.ALL);
-        this.logger.setUseParentHandlers(false);
+        this.logger = setupLogger();
+        this.logger.info("loading bytebin...");
+
+        // load config
+        Path configPath = Paths.get("config.json");
+        Configuration config;
+
+        if (Files.exists(configPath)) {
+            try (BufferedReader reader = Files.newBufferedReader(configPath, StandardCharsets.UTF_8)) {
+                config = new Configuration(new Gson().fromJson(reader, JsonObject.class));
+            }
+        } else {
+            config = new Configuration(new JsonObject());
+        }
+
+        // setup executor
+        this.executor = Executors.newScheduledThreadPool(
+                config.getInt("corePoolSize", 16),
+                new ThreadFactoryBuilder().setNameFormat("bytebin-io-%d").build()
+        );
+
+        // setup loader
+        this.loader = new ContentLoader();
+
+        // how many minutes to cache content for
+        int cacheTimeMins = config.getInt("cacheExpiryMinutes", 10);
+
+        // build content cache
+        this.contentCache = Caffeine.newBuilder()
+                .executor(this.executor)
+                .expireAfterAccess(cacheTimeMins, TimeUnit.MINUTES)
+                .maximumWeight(config.getInt("cacheMaxSizeMb", 200) * MEGABYTE_LENGTH)
+                .weigher((Weigher<String, Content>) (path, content) -> content.content.length)
+                .buildAsync(this.loader);
+
+        // make a new token generator
+        this.tokenGenerator = new TokenGenerator(config.getInt("keyLength", 7));
+
+        // read other config settings
+        this.contentPath = Paths.get("content");
+        this.lifetime = config.getLong("lifetimeMinutes", TimeUnit.DAYS.toMinutes(1));
+        this.host = System.getProperty("server.host", config.getString("host", "127.0.0.1"));
+        this.port = Integer.getInteger("server.port", config.getInt("port", 8080));
+        this.maxContentLength = MEGABYTE_LENGTH * config.getInt("maxContentLengthMb", 10);
+
+        // build rate limit caches
+        this.postRateLimiter = new RateLimiter(
+                config.getInt("postRateLimitPeriodMins", 30),
+                config.getInt("postRateLimit", 30)
+        );
+        this.readRateLimiter = new RateLimiter(
+                config.getInt("readRateLimitPeriodMins", 60),
+                config.getInt("readRateLimit", 100)
+        );
+
+        // make directories
+        Files.createDirectories(this.contentPath);
+
+        // setup the web server
+        defineRoutes();
+
+        // schedule invalidation task
+        this.executor.scheduleAtFixedRate(new InvalidationRunnable(), 1, cacheTimeMins, TimeUnit.MINUTES);
+    }
+
+    private void defineRoutes() {
+        // define bind host & port
+        On.address(this.host).port(this.port);
+
+        // catch all errors & just return some generic error message
+        My.errorHandler((req, resp, error) -> STANDARD_RESPONSE.apply(resp).code(404).plain("Invalid path"));
+
+        // define option route handlers
+        defineOptionsRoute("/post", "POST");
+        defineOptionsRoute("/*", "GET");
+
+        // define upload path
+        On.post("/post").managed(false).serve(req -> {
+            byte[] content = req.body();
+
+            // ensure something was actually posted
+            if (content.length == 0) return STANDARD_RESPONSE.apply(req.response()).code(400).plain("Missing content");
+            // check rate limits
+            if (this.postRateLimiter.check(req)) return STANDARD_RESPONSE.apply(req.response()).code(429).plain("Rate limit exceeded");
+            // check max content length
+            if (content.length > this.maxContentLength) return STANDARD_RESPONSE.apply(req.response()).code(413).plain("Content too large");
+
+            // determine the mediatype
+            MediaType mediaType = determineMediaType(req);
+
+            // generate a key
+            String key = this.tokenGenerator.generate();
+
+            // is the content already compressed?
+            boolean compressed = req.header("Content-Encoding", "").equals("gzip");
+
+            // save the data to the filesystem
+            this.executor.execute(() -> this.loader.save(key, mediaType, content, compressed));
+
+            // return the url location as plain content
+            return STANDARD_RESPONSE.apply(req.response()).code(200).json(U.map("key", key));
+        });
+
+        // serve content
+        On.get("/*").cacheCapacity(0).serve(req -> {
+            // get the requested path
+            String path = req.path().substring(1);
+            if (path.trim().isEmpty() || path.contains(".") || TokenGenerator.INVALID_TOKEN_PATTERN.matcher(path).find()) {
+                return STANDARD_RESPONSE.apply(req.response()).code(404).plain("Invalid path");
+            }
+
+            // check rate limits
+            if (this.readRateLimiter.check(req)) return STANDARD_RESPONSE.apply(req.response()).code(429).plain("Rate limit exceeded");
+
+            // request the file from the cache async
+            this.logger.info("Requesting: " + path);
+            this.contentCache.get(path).whenComplete((content, throwable) -> {
+                if (throwable != null || content == null || content.key == null || content.content.length == 0) {
+                    STANDARD_RESPONSE.apply(req.response()).code(404).plain("Invalid path").done();
+                    return;
+                }
+
+                // will the client accept the content in a compressed form?
+                if (acceptsCompressed(req)) {
+                    STANDARD_RESPONSE.apply(req.response()).code(200)
+                            .header("Cache-Control", "public, max-age=86400")
+                            .header("Content-Encoding", "gzip")
+                            .body(content.content)
+                            .contentType(content.mediaType)
+                            .done();
+                    return;
+                }
+
+                // need to uncompress
+                byte[] uncompressed;
+                try (ByteArrayInputStream in = new ByteArrayInputStream(content.content)) {
+                    try (GZIPInputStream gzipIn = new GZIPInputStream(in)) {
+                        uncompressed = ByteStreams.toByteArray(gzipIn);
+                    }
+                } catch (IOException e) {
+                    STANDARD_RESPONSE.apply(req.response()).code(404).plain("Unable to uncompress data").done();
+                    return;
+                }
+
+                // return the data
+                STANDARD_RESPONSE.apply(req.response()).code(200)
+                        .header("Cache-Control", "public, max-age=86400")
+                        .body(uncompressed)
+                        .contentType(content.mediaType)
+                        .done();
+            });
+
+            // mark that we're going to respond later
+            return req.async();
+        });
+    }
+
+    private static Logger setupLogger() {
+        Logger logger = Logger.getLogger("bytebin");
+        logger.setLevel(Level.ALL);
+        logger.setUseParentHandlers(false);
         ConsoleHandler consoleHandler = new ConsoleHandler();
         consoleHandler.setFormatter(new Formatter() {
             private final DateFormat dateFormat = DateFormat.getTimeInstance(DateFormat.MEDIUM);
@@ -129,155 +306,48 @@ public class ByteBin {
             public String format(LogRecord record) {
                 return String.format(
                         "%s [%s] %s\n",
-                        dateFormat.format(new Date(record.getMillis())),
+                        this.dateFormat.format(new Date(record.getMillis())),
                         record.getLevel().getName(),
                         record.getMessage()
                 );
             }
         });
-        this.logger.addHandler(consoleHandler);
+        logger.addHandler(consoleHandler);
+        return logger;
+    }
 
-        this.logger.info("loading bytebin...");
+    private static void defineOptionsRoute(String path, String allowedMethod) {
+        On.options(path).serve(req -> STANDARD_RESPONSE.apply(req.response())
+                .header("Access-Control-Allow-Methods", allowedMethod)
+                .header("Access-Control-Max-Age", "86400")
+                .header("Access-Control-Allow-Headers", "Content-Type")
+                .code(200)
+                .body(new byte[0])
+        );
+    }
 
-        // setup cache & executor
-        this.executor = Executors.newScheduledThreadPool(16, new ThreadFactoryBuilder().setNameFormat("bytebin-io-%d").build());
-        this.loader = new Loader();
-        this.contentCache = Caffeine.newBuilder()
-                .executor(this.executor)
-                // cache for 10 mins
-                .expireAfterAccess(10, TimeUnit.MINUTES)
-                // up to a max size of 5mb
-                .maximumWeight(5 * MEGABYTE_LENGTH)
-                .weigher((Weigher<String, Content>) (path, content) -> content.content.length)
-                .buildAsync(this.loader);
-
-        // load config
-        Path configPath = Paths.get("config.json");
-        JsonObject config;
-        if (Files.exists(configPath)) {
-            try (BufferedReader reader = Files.newBufferedReader(configPath, StandardCharsets.UTF_8)) {
-                config = new Gson().fromJson(reader, JsonObject.class);
-            }
-        } else {
-            config = new JsonObject();
-            config.addProperty("host", "127.0.0.1");
-            config.addProperty("port", 8080);
-            config.addProperty("keyLength", 7);
-            config.addProperty("lifetime", TimeUnit.DAYS.toMillis(1));
-            // save
-            try (BufferedWriter writer = Files.newBufferedWriter(configPath, StandardCharsets.UTF_8)) {
-                new GsonBuilder().disableHtmlEscaping().setPrettyPrinting().create().toJson(config, writer);
-            }
+    private static MediaType determineMediaType(Req req) {
+        MediaType mt = req.contentType();
+        if (mt == null) {
+            mt = MediaType.TEXT_PLAIN;
         }
-
-        // make a new token generator
-        this.tokenGenerator = new TokenGenerator(config.get("keyLength").getAsInt());
-
-        this.contentPath = Paths.get("content");
-        this.lifetime = config.get("lifetime").getAsLong();
-        this.host = System.getProperty("server.host", config.get("host").getAsString());
-        this.port = Integer.getInteger("server.port", config.get("port").getAsInt());
+        return mt;
     }
 
-    public void setup() throws Exception {
-        Files.createDirectories(this.contentPath);
-
-        // define bind host & port
-        On.address(this.host).port(this.port);
-
-        // catch all errors & just return some generic error message
-        My.errorHandler((req, resp, error) -> STANDARD_RESPONSE.apply(resp).code(404).plain("Invalid path"));
-
-        // define upload path
-        On.options("/post").serve(req -> req.response()
-                .header("Access-Control-Allow-Origin", "*")
-                .header("Access-Control-Allow-Methods", "POST")
-                .header("Access-Control-Max-Age", "86400")
-                .header("Access-Control-Allow-Headers", "Content-Type")
-                .code(200)
-                .body(new byte[0])
-        );
-        On.post("/post").serve(req -> {
-            byte[] content = req.body();
-            if (content.length == 0) {
-                return STANDARD_RESPONSE.apply(req.response()).code(400).plain("Missing file");
-            }
-
-            // determine the mediatype
-            MediaType mediaType;
-            {
-                MediaType mt = req.contentType();
-                if (mt == null) {
-                    mt = MediaType.TEXT_PLAIN;
-                }
-                mediaType = mt;
-            }
-
-            // generate a key
-            String key = this.tokenGenerator.generate();
-
-            // save the data to the filesystem
-            this.executor.execute(() -> this.loader.save(key, mediaType, content));
-
-            // return the url location as plain content
-            return STANDARD_RESPONSE.apply(req.response()).code(200).json(U.map("key", key));
-        });
-
-        // catch all
-        On.options("/*").serve(req -> req.response()
-                .header("Access-Control-Allow-Origin", "*")
-                .header("Access-Control-Allow-Methods", "GET")
-                .header("Access-Control-Max-Age", "86400")
-                .header("Access-Control-Allow-Headers", "Content-Type")
-                .code(200)
-                .body(new byte[0])
-        );
-        On.get("/*").cacheCapacity(0).serve(req -> {
-            // get the requested path
-            String path = req.path().substring(1);
-            if (path.trim().isEmpty() || path.contains(".") || INVALID_TOKEN_PATTERN.matcher(path).find()) {
-                return STANDARD_RESPONSE.apply(req.response()).code(404).plain("Invalid path");
-            }
-
-            this.logger.info("Requesting: " + path);
-
-            // request the file from the cache async
-            this.contentCache.get(path).whenComplete((content, throwable) -> {
-                if (throwable != null || content == null || content.key == null || content.content.length == 0) {
-                    STANDARD_RESPONSE.apply(req.response()).code(404).plain("Invalid path").done();
-                    return;
-                }
-
-                // return the data
-                STANDARD_RESPONSE.apply(req.response()).code(200).body(content.content).contentType(content.mediaType).done();
-            });
-
-            // mark that we're going to respond later
-            return req.async();
-        });
-
-        // clear cache
-        this.executor.scheduleAtFixedRate(() -> {
-            try (Stream<Path> stream = Files.list(this.contentPath)) {
-                stream.filter(Files::isRegularFile)
-                        .forEach(path -> {
-                            try {
-                                Content content = this.loader.load(path);
-                                if (content.shouldExpire()) {
-                                    this.logger.info("Expired: " + path.getFileName().toString());
-                                    Files.delete(path);
-                                }
-                            } catch (Exception e) {
-                                e.printStackTrace();
-                            }
-                        });
-            } catch (IOException e) {
-                e.printStackTrace();
-            }
-        }, 10, 120, TimeUnit.MINUTES);
+    private static boolean acceptsCompressed(Req req) {
+        boolean acceptCompressed = false;
+        String header = req.header("Accept-Encoding", null);
+        if (header != null && Arrays.stream(header.split(", ")).anyMatch(s -> s.equals("gzip"))) {
+            acceptCompressed = true;
+        }
+        return acceptCompressed;
     }
 
-    private final class Loader implements CacheLoader<String, Content> {
+    /**
+     * Manages content i/o with the filesystem, including encoding an instance of {@link Content} into
+     * a single array of bytes
+     */
+    private final class ContentLoader implements CacheLoader<String, Content> {
 
         @Override
         public Content load(String path) throws IOException {
@@ -290,38 +360,54 @@ public class ByteBin {
 
         public Content load(Path resolved) throws IOException {
             if (!Files.exists(resolved)) {
-                return NULL_CONTENT;
+                return EMPTY_CONTENT;
             }
 
-            // read the full bytes
+            // read the file into memory
             byte[] bytes = Files.readAllBytes(resolved);
             if (bytes.length == 0) {
-                return NULL_CONTENT;
+                return EMPTY_CONTENT;
             }
 
+            // create a byte array input stream for the file
+            // we need to decode the content from the storage format
             ByteArrayDataInput in = ByteStreams.newDataInput(bytes);
 
             // read key
             String key = in.readUTF();
 
             // read content type
-            int contentTypeLength = in.readInt();
-            byte[] contentType = new byte[contentTypeLength];
+            byte[] contentType = new byte[in.readInt()];
             in.readFully(contentType);
             MediaType mediaType = MediaType.of(new String(contentType));
 
             // read expiry
             long expiry = in.readLong();
 
-            // read content length
-            int contentLength = in.readInt();
-            byte[] content = new byte[contentLength];
+            // read content
+            byte[] content = new byte[in.readInt()];
             in.readFully(content);
 
             return new Content(key, mediaType, expiry, content);
         }
 
-        public void save(String key, MediaType mediaType, byte[] content) {
+        public void save(String key, MediaType mediaType, byte[] content, boolean isCompressed) {
+            if (!isCompressed) {
+                // data isn't compressed yet, let's do that now.
+                byte[] compressed;
+                try (ByteArrayOutputStream contentOut = new ByteArrayOutputStream(content.length)) {
+                    try (GZIPOutputStream gzipOut = new GZIPOutputStream(contentOut)) {
+                        gzipOut.write(content);
+                    }
+                    compressed = contentOut.toByteArray();
+                } catch (IOException e) {
+                    throw new RuntimeException(e);
+                }
+                content = compressed;
+            }
+
+            // create a byte array output stream for the content
+            // we encode the content & its attributes into the same file
             ByteArrayDataOutput out = ByteStreams.newDataOutput();
 
             // write name
@@ -333,7 +419,8 @@ public class ByteBin {
             out.write(contextType);
 
             // write expiry time
-            out.writeLong(System.currentTimeMillis() + ByteBin.this.lifetime);
+            long expiry = System.currentTimeMillis() + ByteBin.this.lifetime;
+            out.writeLong(expiry);
 
             // write content
             out.writeInt(content.length);
@@ -342,9 +429,11 @@ public class ByteBin {
             // form overall byte array
             byte[] bytes = out.toByteArray();
 
+            // resolve the path to save at
             Path path = ByteBin.this.contentPath.resolve(key);
             ByteBin.this.logger.info("Writing '" + key + "' of type '" + new String(mediaType.getBytes()) + "'");
 
+            // write to file
             try {
                 Files.write(path, bytes, StandardOpenOption.CREATE_NEW);
             } catch (IOException e) {
@@ -354,9 +443,44 @@ public class ByteBin {
                 }
                 e.printStackTrace();
             }
+
+            // add directly to the cache
+            // it's quite likely that the file will be requested only a few seconds after it is uploaded
+            Content c = new Content(key, mediaType, expiry, content);
+            ByteBin.this.contentCache.put(key, CompletableFuture.completedFuture(c));
         }
     }
 
+    /**
+     * Handles a rate limit
+     */
+    private static final class RateLimiter {
+        /** Rate limiter cache - allow x "actions" every x minutes */
+        private final LoadingCache<String, AtomicInteger> rateLimiter;
+        /** The number of actions allowed in each period  */
+        private final int actionsPerCycle;
+
+        public RateLimiter(int periodMins, int actionsPerCycle) {
+            this.rateLimiter = Caffeine.newBuilder()
+                    .expireAfterWrite(periodMins, TimeUnit.MINUTES)
+                    .build(key -> new AtomicInteger(0));
+            this.actionsPerCycle = actionsPerCycle;
+        }
+
+        public boolean check(Req req) {
+            String ipAddress = req.header("x-real-ip", null);
+            if (ipAddress == null) {
+                ipAddress = req.clientIpAddress();
+            }
+
+            //noinspection ConstantConditions
+            return this.rateLimiter.get(ipAddress).incrementAndGet() > this.actionsPerCycle;
+        }
+    }
+
+    /**
+     * Encapsulates content within the service
+     */
     private static final class Content {
         private final String key;
         private final MediaType mediaType;
@@ -370,12 +494,79 @@ public class ByteBin {
             this.content = content;
         }
 
-        public boolean shouldExpire() {
+        private boolean shouldExpire() {
             return this.expiry < System.currentTimeMillis();
         }
     }
 
-    private static class TokenGenerator {
+    /**
+     * Task to delete expired content
+     */
+    private final class InvalidationRunnable implements Runnable {
+        @Override
+        public void run() {
+            try (Stream<Path> stream = Files.list(ByteBin.this.contentPath)) {
+                stream.filter(Files::isRegularFile)
+                        .forEach(path -> {
+                            try {
+                                Content content = ByteBin.this.loader.load(path);
+                                if (content.shouldExpire()) {
+                                    ByteBin.this.logger.info("Expired: " + path.getFileName().toString());
+                                    Files.delete(path);
+                                }
+                            } catch (Exception e) {
+                                e.printStackTrace();
+                            }
+                        });
+            } catch (IOException e) {
+                e.printStackTrace();
+            }
+        }
+    }
+
+    /**
+     * Json config wrapper class
+     */
+    private static final class Configuration {
+        private final JsonObject jsonObject;
+
+        public Configuration(JsonObject jsonObject) {
+            this.jsonObject = jsonObject;
+        }
+
+        public String getString(String path, String def) {
+            JsonElement e = this.jsonObject.get(path);
+            if (e == null || !e.isJsonPrimitive() || !e.getAsJsonPrimitive().isString()) {
+                return def;
+            }
+            return e.getAsString();
+        }
+
+        public int getInt(String path, int def) {
+            JsonElement e = this.jsonObject.get(path);
+            if (e == null || !e.isJsonPrimitive() || !e.getAsJsonPrimitive().isNumber()) {
+                return def;
+            }
+            return e.getAsInt();
+        }
+
+        public long getLong(String path, long def) {
+            JsonElement e = this.jsonObject.get(path);
+            if (e == null || !e.isJsonPrimitive() || !e.getAsJsonPrimitive().isNumber()) {
+                return def;
+            }
+            return e.getAsLong();
+        }
+    }
+
+    /**
+     * Randomly generates tokens for new content uploads
+     */
+    private static final class TokenGenerator {
+        /** Pattern to match invalid tokens */
+        public static final Pattern INVALID_TOKEN_PATTERN = Pattern.compile("[^a-zA-Z0-9]");
+
+        /** Characters to include in a token */
         private static final String CHARACTERS = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
 
         private final int length;
@@ -394,5 +585,4 @@ public class ByteBin {
             return sb.toString();
         }
     }
-
 }
