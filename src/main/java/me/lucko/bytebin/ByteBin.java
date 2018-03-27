@@ -184,11 +184,11 @@ public class ByteBin {
 
         // build rate limit caches
         this.postRateLimiter = new RateLimiter(
-                config.getInt("postRateLimitPeriodMins", 30),
+                config.getInt("postRateLimitPeriodMins", 10),
                 config.getInt("postRateLimit", 30)
         );
         this.readRateLimiter = new RateLimiter(
-                config.getInt("readRateLimitPeriodMins", 60),
+                config.getInt("readRateLimitPeriodMins", 10),
                 config.getInt("readRateLimit", 100)
         );
 
@@ -241,7 +241,7 @@ public class ByteBin {
         });
 
         // serve content
-        On.get("/*").cacheCapacity(0).serve(req -> {
+        On.get("/*").managed(false).cacheCapacity(0).serve(req -> {
             // get the requested path
             String path = req.path().substring(1);
             if (path.trim().isEmpty() || path.contains(".") || TokenGenerator.INVALID_TOKEN_PATTERN.matcher(path).find()) {
