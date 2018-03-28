@@ -129,7 +129,7 @@ public class ByteBin {
     // the path to store the content in
     private final Path contentPath;
     // the lifetime of content in milliseconds
-    private final long lifetime;
+    private final long lifetimeMillis;
     // web server host
     private final String host;
     // web server port
@@ -177,7 +177,7 @@ public class ByteBin {
 
         // read other config settings
         this.contentPath = Paths.get("content");
-        this.lifetime = config.getLong("lifetimeMinutes", TimeUnit.DAYS.toMinutes(1));
+        this.lifetimeMillis = TimeUnit.MINUTES.toMillis(config.getLong("lifetimeMinutes", TimeUnit.DAYS.toMinutes(1)));
         this.host = System.getProperty("server.host", config.getString("host", "127.0.0.1"));
         this.port = Integer.getInteger("server.port", config.getInt("port", 8080));
         this.maxContentLength = MEGABYTE_LENGTH * config.getInt("maxContentLengthMb", 10);
@@ -419,7 +419,7 @@ public class ByteBin {
             out.write(contextType);
 
             // write expiry time
-            long expiry = System.currentTimeMillis() + ByteBin.this.lifetime;
+            long expiry = System.currentTimeMillis() + ByteBin.this.lifetimeMillis;
             out.writeLong(expiry);
 
             // write content
