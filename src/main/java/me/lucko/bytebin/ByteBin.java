@@ -64,7 +64,9 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Function;
 import java.util.logging.ConsoleHandler;
 import java.util.logging.Formatter;
@@ -215,14 +217,12 @@ public class ByteBin {
 
         // define upload path
         On.post("/post").managed(false).serve(req -> {
-            byte[] content = req.body();
+            AtomicReference<byte[]> content = new AtomicReference<>(req.body());
 
             // ensure something was actually posted
-            if (content.length == 0) return STANDARD_RESPONSE.apply(req.response()).code(400).plain("Missing content");
+            if (content.get().length == 0) return STANDARD_RESPONSE.apply(req.response()).code(400).plain("Missing content");
             // check rate limits
             if (this.postRateLimiter.check(req)) return STANDARD_RESPONSE.apply(req.response()).code(429).plain("Rate limit exceeded");
-            // check max content length
-            if (content.length > this.maxContentLength) return STANDARD_RESPONSE.apply(req.response()).code(413).plain("Content too large");
 
             // determine the mediatype
             MediaType mediaType = determineMediaType(req);
@@ -233,8 +233,25 @@ public class ByteBin {
             // is the content already compressed?
             boolean compressed = req.header("Content-Encoding", "").equals("gzip");
 
+            // if compression is required at a later stage
+            AtomicBoolean requiresCompression = new AtomicBoolean(false);
+
+            // if it's not compressed, consider the effect of compression on the content length
+            if (!compressed) {
+                // if the max content length would be exceeded - try compressing
+                if (content.get().length > this.maxContentLength) {
+                    content.set(gzip(content.get()));
+                } else {
+                    // compress later
+                    requiresCompression.set(true);
+                }
+            }
+
+            // check max content length
+            if (content.get().length > this.maxContentLength) return STANDARD_RESPONSE.apply(req.response()).code(413).plain("Content too large");
+
             // save the data to the filesystem
-            this.executor.execute(() -> this.loader.save(key, mediaType, content, compressed));
+            this.executor.execute(() -> this.loader.save(key, mediaType, content.get(), requiresCompression.get()));
 
             // return the url location as plain content
             return STANDARD_RESPONSE.apply(req.response()).code(200).json(U.map("key", key));
@@ -272,10 +289,8 @@ public class ByteBin {
 
                 // need to uncompress
                 byte[] uncompressed;
-                try (ByteArrayInputStream in = new ByteArrayInputStream(content.content)) {
-                    try (GZIPInputStream gzipIn = new GZIPInputStream(in)) {
-                        uncompressed = ByteStreams.toByteArray(gzipIn);
-                    }
+                try {
+                    uncompressed = gunzip(content.content);
                 } catch (IOException e) {
                     STANDARD_RESPONSE.apply(req.response()).code(404).plain("Unable to uncompress data").done();
                     return;
@@ -343,6 +358,23 @@ public class ByteBin {
         return acceptCompressed;
     }
 
+    private static byte[] gzip(byte[] buf) {
+        ByteArrayOutputStream out = new ByteArrayOutputStream(buf.length);
+        try (GZIPOutputStream gzipOut = new GZIPOutputStream(out)) {
+            gzipOut.write(buf);
+        } catch (IOException e) {
+            throw new RuntimeException(e);
+        }
+        return out.toByteArray();
+    }
+
+    private static byte[] gunzip(byte[] buf) throws IOException {
+        ByteArrayInputStream in = new ByteArrayInputStream(buf);
+        try (GZIPInputStream gzipIn = new GZIPInputStream(in)) {
+            return ByteStreams.toByteArray(gzipIn);
+        }
+    }
+
     /**
      * Manages content i/o with the filesystem, including encoding an instance of {@link Content} into
      * a single array of bytes
@@ -391,19 +423,9 @@ public class ByteBin {
             return new Content(key, mediaType, expiry, content);
         }
 
-        public void save(String key, MediaType mediaType, byte[] content, boolean isCompressed) {
-            if (!isCompressed) {
-                // data isn't compressed yet, let's do that now.
-                byte[] compressed;
-                try (ByteArrayOutputStream contentOut = new ByteArrayOutputStream(content.length)) {
-                    try (GZIPOutputStream gzipOut = new GZIPOutputStream(contentOut)) {
-                        gzipOut.write(content);
-                    }
-                    compressed = contentOut.toByteArray();
-                } catch (IOException e) {
-                    throw new RuntimeException(e);
-                }
-                content = compressed;
+        public void save(String key, MediaType mediaType, byte[] content, boolean requiresCompression) {
+            if (requiresCompression) {
+                content = gzip(content);
             }
 
             // create a byte array output stream for the content
