@@ -265,8 +265,12 @@ public class ByteBin {
             // check max content length
             if (content.get().length > this.maxContentLength) return STANDARD_RESPONSE.apply(req.response()).code(413).plain("Content too large");
 
+            // record the content in the cache
+            CompletableFuture<Content> future = new CompletableFuture<>();
+            this.contentCache.put(key, future);
+
             // save the data to the filesystem
-            this.executor.execute(() -> this.loader.save(key, mediaType, content.get(), requiresCompression.get()));
+            this.executor.execute(() -> this.loader.save(key, mediaType, content.get(), requiresCompression.get(), future));
 
             // return the url location as plain content
             return STANDARD_RESPONSE.apply(req.response()).code(200).json(U.map("key", key));
@@ -438,10 +442,17 @@ public class ByteBin {
             return new Content(key, mediaType, expiry, content);
         }
 
-        public void save(String key, MediaType mediaType, byte[] content, boolean requiresCompression) {
+        public void save(String key, MediaType mediaType, byte[] content, boolean requiresCompression, CompletableFuture<Content> future) {
             if (requiresCompression) {
                 content = gzip(content);
             }
+
+            long expiry = System.currentTimeMillis() + ByteBin.this.lifetimeMillis;
+
+            // add directly to the cache
+            // it's quite likely that the file will be requested only a few seconds after it is uploaded
+            Content c = new Content(key, mediaType, expiry, content);
+            future.complete(c);
 
             // create a byte array output stream for the content
             // we encode the content & its attributes into the same file
@@ -456,7 +467,6 @@ public class ByteBin {
             out.write(contextType);
 
             // write expiry time
-            long expiry = System.currentTimeMillis() + ByteBin.this.lifetimeMillis;
             out.writeLong(expiry);
 
             // write content
@@ -480,11 +490,6 @@ public class ByteBin {
                 }
                 e.printStackTrace();
             }
-
-            // add directly to the cache
-            // it's quite likely that the file will be requested only a few seconds after it is uploaded
-            Content c = new Content(key, mediaType, expiry, content);
-            ByteBin.this.contentCache.put(key, CompletableFuture.completedFuture(c));
         }
     }
 
