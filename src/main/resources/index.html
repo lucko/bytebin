@@ -1,0 +1,114 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <title>Bytebin</title>
+
+    <style>
+        html, body {
+            background-color: #001f2c;
+            color: #f97705;
+            font-family: monospace;
+        }
+        h1 {
+            font-size: 2.5em;
+        }
+        a {
+            color: #fbad69;
+        }
+        a:visited {
+            color: 		#fbad69;
+        }
+        code {
+            background: #194032;
+            padding: 1px;
+        }
+        li {
+            line-height: 20px;
+        }
+
+        .section {
+            padding: 10px 10px;
+            min-width: 500px;
+        }
+
+        .submitinput {
+            padding: 20px 10px;
+        }
+
+        .submitinput textarea {
+            width: 100%;
+            height: 300px;
+            min-height: 50px;
+            resize: vertical;
+            background-color: inherit;
+            color: inherit;
+            border-color: #0587f9;
+        }
+
+        .submitinput button {
+            color: inherit;
+            background-color: inherit;
+        }
+    </style>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.2.1/jquery.min.js" integrity="sha256-hwg4gsxgFZhOsEEamdOYGBf13FyQuiTwlAQgxVSNgt4=" crossorigin="anonymous"></script>
+    <script type="text/javascript">
+        $(document).on("click", "#submitbutton", function(e) {
+            var content = $("#content").val();
+            if (!content) {
+                return
+            }
+
+            $.ajax("post", {
+                data: content,
+                method: "POST",
+                success: function(data) {
+                    $(location).attr("href", data["key"]);
+                }
+            });
+        });
+    </script>
+</head>
+
+<body>
+<div class="section">
+    <h1>bytebin - stupidly simple pastebin service</h1>
+    <h3>it's a "pastebin" in a very simplified sense. effectively, it:</h3>
+    <ul>
+        <li>accepts (optionally compressed) post requests containing raw content</li>
+        <li>retains content on disk and cached in memory for 1h</li>
+        <li>returns a token to indicate the location of the content</li>
+        <li>serves content (in a compressed form if the client can handle it) when requested (using the token)</li>
+    </ul>
+    <p>More information can be found on <a href="https://github.com/lucko/bytebin">github</a>.</p>
+</div>
+
+<div class="section">
+    <h2>create a new paste</h2>
+    <h4>just enter text in the box below and click "submit"</h4>
+    <div class="submitinput">
+        <textarea id="content"></textarea>
+        <button id="submitbutton" type="button">submit</button>
+    </div>
+</div>
+
+<div class="section">
+    <h2>API usage</h2>
+    <p>The API fully supports CORS.</p>
+
+    <h3>Reading content</h3>
+    <ul>
+        <li>Content can be read from <code>/{key}</code>.</li>
+    </ul>
+
+    <h3>Posting content</h3>
+    <ul>
+        <li>Send a POST request to the <code>/post</code> endpoint. The request body should contain the content to be uploaded.</li>
+        <li>It is recommended to provide <code>Content-Type</code> and <code>User-Agent</code> headers, but this is not required.</li>
+        <li>Ideally, content should be compressed with GZIP before being uploaded. Include the <code>Content-Encoding: gzip</code> header if this is the case.</li>
+        <li>The return type is a JSON object. The "key" of the paste can be found at <code>response["key"]</code>.</li>
+    </ul>
+</div>
+</body>
+</html>

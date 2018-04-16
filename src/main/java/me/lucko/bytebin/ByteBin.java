@@ -34,6 +34,7 @@ import com.google.common.base.Preconditions;
 import com.google.common.io.ByteArrayDataInput;
 import com.google.common.io.ByteArrayDataOutput;
 import com.google.common.io.ByteStreams;
+import com.google.common.io.CharStreams;
 import com.google.common.util.concurrent.ThreadFactoryBuilder;
 import com.google.gson.Gson;
 import com.google.gson.JsonElement;
@@ -50,6 +51,7 @@ import java.io.BufferedReader;
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
+import java.io.InputStreamReader;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.FileAlreadyExistsException;
 import java.nio.file.Files;
@@ -128,6 +130,9 @@ public class ByteBin {
     /** Token generator */
     private final TokenGenerator tokenGenerator;
 
+    /** Index page */
+    private final byte[] indexPage;
+
     // the path to store the content in
     private final Path contentPath;
     // the lifetime of content in milliseconds
@@ -197,6 +202,13 @@ public class ByteBin {
         // make directories
         Files.createDirectories(this.contentPath);
 
+        // load index page
+        try (InputStreamReader in = new InputStreamReader(ByteBin.class.getResourceAsStream("/index.html"), StandardCharsets.UTF_8)) {
+            this.indexPage = CharStreams.toString(in).getBytes(StandardCharsets.UTF_8);
+        } catch (IOException e) {
+            throw new RuntimeException(e);
+        }
+
         // setup the web server
         defineRoutes();
 
@@ -214,6 +226,9 @@ public class ByteBin {
         // define option route handlers
         defineOptionsRoute("/post", "POST");
         defineOptionsRoute("/*", "GET");
+
+        // serve index page
+        On.page("/").html(this.indexPage);
 
         // define upload path
         On.post("/post").managed(false).serve(req -> {
