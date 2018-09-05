@@ -43,8 +43,7 @@ import com.google.gson.JsonObject;
 import org.rapidoid.http.MediaType;
 import org.rapidoid.http.Req;
 import org.rapidoid.http.Resp;
-import org.rapidoid.setup.My;
-import org.rapidoid.setup.On;
+import org.rapidoid.setup.Setup;
 import org.rapidoid.u.U;
 
 import java.io.BufferedReader;
@@ -69,7 +68,6 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
-import java.util.function.Function;
 import java.util.logging.ConsoleHandler;
 import java.util.logging.Formatter;
 import java.util.logging.Level;
@@ -83,15 +81,24 @@ import java.util.zip.GZIPOutputStream;
 /**
  * Stupidly simple "pastebin" service.
  */
-public class ByteBin {
+public class Bytebin implements AutoCloseable {
 
     // Bootstrap
-    public static void main(String[] args) {
-        try {
-            new ByteBin();
-        } catch (Exception e) {
-            e.printStackTrace();
+    public static void main(String[] args) throws Exception {
+        // load config
+        Path configPath = Paths.get("config.json");
+        Configuration config;
+
+        if (Files.exists(configPath)) {
+            try (BufferedReader reader = Files.newBufferedReader(configPath, StandardCharsets.UTF_8)) {
+                config = new Configuration(new Gson().fromJson(reader, JsonObject.class));
+            }
+        } else {
+            config = new Configuration(new JsonObject());
         }
+
+        Bytebin bytebin = new Bytebin(config);
+        Runtime.getRuntime().addShutdownHook(new Thread(bytebin::close, "Bytebin Shutdown Thread"));
     }
 
     /** Empty byte array */
@@ -102,9 +109,6 @@ public class ByteBin {
 
     /** Number of bytes in a megabyte */
     private static final long MEGABYTE_LENGTH = 1024L * 1024L;
-
-    /** Standard response function. (always add the CORS header)*/
-    private static final Function<Resp, Resp> STANDARD_RESPONSE = resp -> resp.header("Access-Control-Allow-Origin", "*");
 
     /** Logger instance */
     private final Logger logger;
@@ -142,22 +146,13 @@ public class ByteBin {
     // web server port
     private final int port;
 
-    public ByteBin() throws Exception {
+    /** The web server instance */
+    private final Setup server;
+
+    public Bytebin(Configuration config) throws Exception {
         // setup simple logger
-        this.logger = setupLogger();
+        this.logger = createLogger();
         this.logger.info("loading bytebin...");
-
-        // load config
-        Path configPath = Paths.get("config.json");
-        Configuration config;
-
-        if (Files.exists(configPath)) {
-            try (BufferedReader reader = Files.newBufferedReader(configPath, StandardCharsets.UTF_8)) {
-                config = new Configuration(new Gson().fromJson(reader, JsonObject.class));
-            }
-        } else {
-            config = new Configuration(new JsonObject());
-        }
 
         // setup executor
         this.executor = Executors.newScheduledThreadPool(
@@ -203,41 +198,50 @@ public class ByteBin {
         Files.createDirectories(this.contentPath);
 
         // load index page
-        try (InputStreamReader in = new InputStreamReader(ByteBin.class.getResourceAsStream("/index.html"), StandardCharsets.UTF_8)) {
+        try (InputStreamReader in = new InputStreamReader(Bytebin.class.getResourceAsStream("/index.html"), StandardCharsets.UTF_8)) {
             this.indexPage = CharStreams.toString(in).getBytes(StandardCharsets.UTF_8);
         } catch (IOException e) {
             throw new RuntimeException(e);
         }
 
         // setup the web server
-        defineRoutes();
+        this.server = createWebServer();
 
         // schedule invalidation task
         this.executor.scheduleAtFixedRate(new InvalidationRunnable(), 1, cacheTimeMins, TimeUnit.MINUTES);
     }
 
-    private void defineRoutes() {
+    /** Standard response function. (always add the CORS header)*/
+    private static Resp cors(Resp resp) {
+        return resp.header("Access-Control-Allow-Origin", "*");
+    }
+
+    private Setup createWebServer() {
+        Setup server = Setup.create("bytebin");
+
         // define bind host & port
-        On.address(this.host).port(this.port);
+        server.address(this.host).port(this.port);
 
         // catch all errors & just return some generic error message
-        My.errorHandler((req, resp, error) -> STANDARD_RESPONSE.apply(resp).code(404).plain("Invalid path"));
+        server.custom().errorHandler((req, resp, error) -> cors(resp).code(404).plain("Invalid path"));
 
         // define option route handlers
-        defineOptionsRoute("/post", "POST");
-        defineOptionsRoute("/*", "GET");
+        defineOptionsRoute(server, "/post", "POST");
+        defineOptionsRoute(server, "/*", "GET");
 
         // serve index page
-        On.page("/").html(this.indexPage);
+        server.page("/").html(this.indexPage);
 
         // define upload path
-        On.post("/post").managed(false).serve(req -> {
+        server.post("/post").managed(false).serve(req -> {
             AtomicReference<byte[]> content = new AtomicReference<>(req.body());
 
+            String ipAddress = getIpAddress(req);
+
             // ensure something was actually posted
-            if (content.get().length == 0) return STANDARD_RESPONSE.apply(req.response()).code(400).plain("Missing content");
+            if (content.get().length == 0) return cors(req.response()).code(400).plain("Missing content");
             // check rate limits
-            if (this.postRateLimiter.check(req)) return STANDARD_RESPONSE.apply(req.response()).code(429).plain("Rate limit exceeded");
+            if (this.postRateLimiter.check(ipAddress)) return cors(req.response()).code(429).plain("Rate limit exceeded");
 
             // determine the mediatype
             MediaType mediaType = determineMediaType(req);
@@ -255,7 +259,7 @@ public class ByteBin {
             if (!compressed) {
                 // if the max content length would be exceeded - try compressing
                 if (content.get().length > this.maxContentLength) {
-                    content.set(gzip(content.get()));
+                    content.set(compress(content.get()));
                 } else {
                     // compress later
                     requiresCompression.set(true);
@@ -263,7 +267,16 @@ public class ByteBin {
             }
 
             // check max content length
-            if (content.get().length > this.maxContentLength) return STANDARD_RESPONSE.apply(req.response()).code(413).plain("Content too large");
+            if (content.get().length > this.maxContentLength) return cors(req.response()).code(413).plain("Content too large");
+
+            this.logger.info("[POST]");
+            this.logger.info("    key = " + key);
+            this.logger.info("    type = " + new String(mediaType.getBytes()));
+            this.logger.info("    user agent = " + req.header("User-Agent", "null"));
+            this.logger.info("    ip address = " + ipAddress);
+            this.logger.info("    content size = " + String.format("%,d", content.get().length / 1024) + " KB");
+            this.logger.info("    compressed = " + !requiresCompression.get());
+            this.logger.info("");
 
             // record the content in the cache
             CompletableFuture<Content> future = new CompletableFuture<>();
@@ -273,31 +286,41 @@ public class ByteBin {
             this.executor.execute(() -> this.loader.save(key, mediaType, content.get(), requiresCompression.get(), future));
 
             // return the url location as plain content
-            return STANDARD_RESPONSE.apply(req.response()).code(200).json(U.map("key", key));
+            return cors(req.response()).code(200).json(U.map("key", key));
         });
 
         // serve content
-        On.get("/*").managed(false).cacheCapacity(0).serve(req -> {
+        server.get("/*").managed(false).cacheCapacity(0).serve(req -> {
             // get the requested path
             String path = req.path().substring(1);
             if (path.trim().isEmpty() || path.contains(".") || TokenGenerator.INVALID_TOKEN_PATTERN.matcher(path).find()) {
-                return STANDARD_RESPONSE.apply(req.response()).code(404).plain("Invalid path");
+                return cors(req.response()).code(404).plain("Invalid path");
             }
 
+            String ipAddress = getIpAddress(req);
+
             // check rate limits
-            if (this.readRateLimiter.check(req)) return STANDARD_RESPONSE.apply(req.response()).code(429).plain("Rate limit exceeded");
+            if (this.readRateLimiter.check(ipAddress)) return cors(req.response()).code(429).plain("Rate limit exceeded");
 
             // request the file from the cache async
-            this.logger.info("Requesting: " + path);
-            this.contentCache.get(path).whenComplete((content, throwable) -> {
+            boolean supportsCompression = acceptsCompressed(req);
+
+            this.logger.info("[REQUEST]");
+            this.logger.info("    key = " + path);
+            this.logger.info("    user agent = " + req.header("User-Agent", "null"));
+            this.logger.info("    ip address = " + ipAddress);
+            this.logger.info("    supports compression = " + supportsCompression);
+            this.logger.info("");
+
+            this.contentCache.get(path).whenCompleteAsync((content, throwable) -> {
                 if (throwable != null || content == null || content.key == null || content.content.length == 0) {
-                    STANDARD_RESPONSE.apply(req.response()).code(404).plain("Invalid path").done();
+                    cors(req.response()).code(404).plain("Invalid path").done();
                     return;
                 }
 
                 // will the client accept the content in a compressed form?
-                if (acceptsCompressed(req)) {
-                    STANDARD_RESPONSE.apply(req.response()).code(200)
+                if (supportsCompression) {
+                    cors(req.response()).code(200)
                             .header("Cache-Control", "public, max-age=86400")
                             .header("Content-Encoding", "gzip")
                             .body(content.content)
@@ -309,14 +332,14 @@ public class ByteBin {
                 // need to uncompress
                 byte[] uncompressed;
                 try {
-                    uncompressed = gunzip(content.content);
+                    uncompressed = decompress(content.content);
                 } catch (IOException e) {
-                    STANDARD_RESPONSE.apply(req.response()).code(404).plain("Unable to uncompress data").done();
+                    cors(req.response()).code(404).plain("Unable to uncompress data").done();
                     return;
                 }
 
                 // return the data
-                STANDARD_RESPONSE.apply(req.response()).code(200)
+                cors(req.response()).code(200)
                         .header("Cache-Control", "public, max-age=86400")
                         .body(uncompressed)
                         .contentType(content.mediaType)
@@ -326,9 +349,24 @@ public class ByteBin {
             // mark that we're going to respond later
             return req.async();
         });
+
+        server.activate();
+        return server;
     }
 
-    private static Logger setupLogger() {
+    @Override
+    public void close() {
+        this.server.halt();
+        this.executor.shutdown();
+        try {
+            this.executor.awaitTermination(30, TimeUnit.SECONDS);
+        } catch (InterruptedException e) {
+            e.printStackTrace();
+        }
+
+    }
+
+    private static Logger createLogger() {
         Logger logger = Logger.getLogger("bytebin");
         logger.setLevel(Level.ALL);
         logger.setUseParentHandlers(false);
@@ -350,8 +388,8 @@ public class ByteBin {
         return logger;
     }
 
-    private static void defineOptionsRoute(String path, String allowedMethod) {
-        On.options(path).serve(req -> STANDARD_RESPONSE.apply(req.response())
+    private static void defineOptionsRoute(Setup setup, String path, String allowedMethod) {
+        setup.options(path).serve(req -> cors(req.response())
                 .header("Access-Control-Allow-Methods", allowedMethod)
                 .header("Access-Control-Max-Age", "86400")
                 .header("Access-Control-Allow-Headers", "Content-Type")
@@ -377,7 +415,7 @@ public class ByteBin {
         return acceptCompressed;
     }
 
-    private static byte[] gzip(byte[] buf) {
+    private static byte[] compress(byte[] buf) {
         ByteArrayOutputStream out = new ByteArrayOutputStream(buf.length);
         try (GZIPOutputStream gzipOut = new GZIPOutputStream(out)) {
             gzipOut.write(buf);
@@ -387,7 +425,7 @@ public class ByteBin {
         return out.toByteArray();
     }
 
-    private static byte[] gunzip(byte[] buf) throws IOException {
+    private static byte[] decompress(byte[] buf) throws IOException {
         ByteArrayInputStream in = new ByteArrayInputStream(buf);
         try (GZIPInputStream gzipIn = new GZIPInputStream(in)) {
             return ByteStreams.toByteArray(gzipIn);
@@ -402,10 +440,10 @@ public class ByteBin {
 
         @Override
         public Content load(String path) throws IOException {
-            ByteBin.this.logger.info("Loading: " + path);
+            Bytebin.this.logger.info("[I/O] Loading " + path + " from disk");
 
             // resolve the path within the content dir
-            Path resolved = ByteBin.this.contentPath.resolve(path);
+            Path resolved = Bytebin.this.contentPath.resolve(path);
             return load(resolved);
         }
 
@@ -444,10 +482,10 @@ public class ByteBin {
 
         public void save(String key, MediaType mediaType, byte[] content, boolean requiresCompression, CompletableFuture<Content> future) {
             if (requiresCompression) {
-                content = gzip(content);
+                content = compress(content);
             }
 
-            long expiry = System.currentTimeMillis() + ByteBin.this.lifetimeMillis;
+            long expiry = System.currentTimeMillis() + Bytebin.this.lifetimeMillis;
 
             // add directly to the cache
             // it's quite likely that the file will be requested only a few seconds after it is uploaded
@@ -477,20 +515,27 @@ public class ByteBin {
             byte[] bytes = out.toByteArray();
 
             // resolve the path to save at
-            Path path = ByteBin.this.contentPath.resolve(key);
-            ByteBin.this.logger.info("Writing '" + key + "' of type '" + new String(mediaType.getBytes()) + "'");
+            Path path = Bytebin.this.contentPath.resolve(key);
 
             // write to file
             try {
                 Files.write(path, bytes, StandardOpenOption.CREATE_NEW);
             } catch (IOException e) {
                 if (e instanceof FileAlreadyExistsException) {
-                    ByteBin.this.logger.info("File '" + key + "' already exists.");
+                    Bytebin.this.logger.info("File '" + key + "' already exists.");
                     return;
                 }
                 e.printStackTrace();
             }
         }
+    }
+
+    private static String getIpAddress(Req req) {
+        String ipAddress = req.header("x-real-ip", null);
+        if (ipAddress == null) {
+            ipAddress = req.clientIpAddress();
+        }
+        return ipAddress;
     }
 
     /**
@@ -509,12 +554,7 @@ public class ByteBin {
             this.actionsPerCycle = actionsPerCycle;
         }
 
-        public boolean check(Req req) {
-            String ipAddress = req.header("x-real-ip", null);
-            if (ipAddress == null) {
-                ipAddress = req.clientIpAddress();
-            }
-
+        public boolean check(String ipAddress) {
             //noinspection ConstantConditions
             return this.rateLimiter.get(ipAddress).incrementAndGet() > this.actionsPerCycle;
         }
@@ -547,13 +587,13 @@ public class ByteBin {
     private final class InvalidationRunnable implements Runnable {
         @Override
         public void run() {
-            try (Stream<Path> stream = Files.list(ByteBin.this.contentPath)) {
+            try (Stream<Path> stream = Files.list(Bytebin.this.contentPath)) {
                 stream.filter(Files::isRegularFile)
                         .forEach(path -> {
                             try {
-                                Content content = ByteBin.this.loader.load(path);
+                                Content content = Bytebin.this.loader.load(path);
                                 if (content.shouldExpire()) {
-                                    ByteBin.this.logger.info("Expired: " + path.getFileName().toString());
+                                    Bytebin.this.logger.info("Expired: " + path.getFileName().toString());
                                     Files.delete(path);
                                 }
                             } catch (Exception e) {

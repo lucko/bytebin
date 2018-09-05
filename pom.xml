@@ -44,7 +44,7 @@
                     <archive>
                         <manifest>
                             <addClasspath>true</addClasspath>
-                            <mainClass>me.lucko.bytebin.ByteBin</mainClass>
+                            <mainClass>me.lucko.bytebin.Bytebin</mainClass>
                         </manifest>
                     </archive>
                 </configuration>
@@ -73,7 +73,7 @@
         <dependency>
             <groupId>org.rapidoid</groupId>
             <artifactId>rapidoid-http-server</artifactId>
-            <version>5.5.4</version>
+            <version>5.5.5</version>
             <scope>compile</scope>
         </dependency>
         <dependency>
