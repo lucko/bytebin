@@ -46,11 +46,17 @@ import org.rapidoid.http.Resp;
 import org.rapidoid.setup.Setup;
 import org.rapidoid.u.U;
 
+import java.io.BufferedInputStream;
+import java.io.BufferedOutputStream;
 import java.io.BufferedReader;
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
+import java.io.DataInputStream;
+import java.io.DataOutputStream;
 import java.io.IOException;
+import java.io.InputStream;
 import java.io.InputStreamReader;
+import java.nio.channels.SeekableByteChannel;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.FileAlreadyExistsException;
 import java.nio.file.Files;
@@ -452,32 +458,45 @@ public class Bytebin implements AutoCloseable {
                 return EMPTY_CONTENT;
             }
 
-            // read the file into memory
-            byte[] bytes = Files.readAllBytes(resolved);
-            if (bytes.length == 0) {
+            try (DataInputStream in = new DataInputStream(Files.newInputStream(resolved))) {
+                // read key
+                String key = in.readUTF();
+
+                // read content type
+                byte[] contentType = new byte[in.readInt()];
+                in.readFully(contentType);
+                MediaType mediaType = MediaType.of(new String(contentType));
+
+                // read expiry
+                long expiry = in.readLong();
+
+                // read content
+                byte[] content = new byte[in.readInt()];
+                in.readFully(content);
+
+                return new Content(key, mediaType, expiry, content);
+            }
+        }
+
+        public Content loadMeta(Path resolved) throws IOException {
+            if (!Files.exists(resolved)) {
                 return EMPTY_CONTENT;
             }
 
-            // create a byte array input stream for the file
-            // we need to decode the content from the storage format
-            ByteArrayDataInput in = ByteStreams.newDataInput(bytes);
+            try (DataInputStream in = new DataInputStream(new BufferedInputStream(Files.newInputStream(resolved)))) {
+                // read key
+                String key = in.readUTF();
 
-            // read key
-            String key = in.readUTF();
+                // read content type
+                byte[] contentType = new byte[in.readInt()];
+                in.readFully(contentType);
+                MediaType mediaType = MediaType.of(new String(contentType));
 
-            // read content type
-            byte[] contentType = new byte[in.readInt()];
-            in.readFully(contentType);
-            MediaType mediaType = MediaType.of(new String(contentType));
+                // read expiry
+                long expiry = in.readLong();
 
-            // read expiry
-            long expiry = in.readLong();
-
-            // read content
-            byte[] content = new byte[in.readInt()];
-            in.readFully(content);
-
-            return new Content(key, mediaType, expiry, content);
+                return new Content(key, mediaType, expiry, EMPTY_BYTES);
+            }
         }
 
         public void save(String key, MediaType mediaType, byte[] content, boolean requiresCompression, CompletableFuture<Content> future) {
@@ -492,34 +511,24 @@ public class Bytebin implements AutoCloseable {
             Content c = new Content(key, mediaType, expiry, content);
             future.complete(c);
 
-            // create a byte array output stream for the content
-            // we encode the content & its attributes into the same file
-            ByteArrayDataOutput out = ByteStreams.newDataOutput();
-
-            // write name
-            out.writeUTF(key);
-
-            // write content type
-            byte[] contextType = mediaType.getBytes();
-            out.writeInt(contextType.length);
-            out.write(contextType);
-
-            // write expiry time
-            out.writeLong(expiry);
-
-            // write content
-            out.writeInt(content.length);
-            out.write(content);
-
-            // form overall byte array
-            byte[] bytes = out.toByteArray();
-
             // resolve the path to save at
             Path path = Bytebin.this.contentPath.resolve(key);
 
-            // write to file
-            try {
-                Files.write(path, bytes, StandardOpenOption.CREATE_NEW);
+            try (DataOutputStream out = new DataOutputStream(new BufferedOutputStream(Files.newOutputStream(path, StandardOpenOption.CREATE_NEW)))) {
+                // write name
+                out.writeUTF(key);
+
+                // write content type
+                byte[] contextType = mediaType.getBytes();
+                out.writeInt(contextType.length);
+                out.write(contextType);
+
+                // write expiry time
+                out.writeLong(expiry);
+
+                // write content
+                out.writeInt(content.length);
+                out.write(content);
             } catch (IOException e) {
                 if (e instanceof FileAlreadyExistsException) {
                     Bytebin.this.logger.info("File '" + key + "' already exists.");
@@ -591,7 +600,7 @@ public class Bytebin implements AutoCloseable {
                 stream.filter(Files::isRegularFile)
                         .forEach(path -> {
                             try {
-                                Content content = Bytebin.this.loader.load(path);
+                                Content content = Bytebin.this.loader.loadMeta(path);
                                 if (content.shouldExpire()) {
                                     Bytebin.this.logger.info("Expired: " + path.getFileName().toString());
                                     Files.delete(path);
