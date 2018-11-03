@@ -288,7 +288,7 @@ public class Bytebin implements AutoCloseable {
             this.executor.execute(() -> this.loader.save(key, mediaType, content.get(), requiresCompression.get(), future));
 
             // return the url location as plain content
-            return cors(req.response()).code(200).json(U.map("key", key));
+            return cors(req.response()).code(201).header("Location", key).json(U.map("key", key));
         });
 
         // serve content

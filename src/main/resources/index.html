@@ -107,7 +107,7 @@
         <li>Send a POST request to the <code>/post</code> endpoint. The request body should contain the content to be uploaded.</li>
         <li>It is recommended to provide <code>Content-Type</code> and <code>User-Agent</code> headers, but this is not required.</li>
         <li>Ideally, content should be compressed with GZIP before being uploaded. Include the <code>Content-Encoding: gzip</code> header if this is the case.</li>
-        <li>The return type is a JSON object. The "key" of the paste can be found at <code>response["key"]</code>.</li>
+        <li>The return type is a JSON object. The "key" of the paste can be found at <code>response["key"]</code>. The key is also specified in the <code>Location</code> header.</li>
     </ul>
 </div>
 </body>
