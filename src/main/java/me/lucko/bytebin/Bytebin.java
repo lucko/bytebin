@@ -61,6 +61,9 @@ import java.nio.file.Paths;
 import java.nio.file.StandardOpenOption;
 import java.security.SecureRandom;
 import java.text.DateFormat;
+import java.time.Instant;
+import java.time.ZoneOffset;
+import java.time.format.DateTimeFormatter;
 import java.util.Arrays;
 import java.util.Date;
 import java.util.concurrent.CompletableFuture;
@@ -268,6 +271,8 @@ public class Bytebin implements AutoCloseable {
                 }
             }
 
+            long expiry = System.currentTimeMillis() + this.lifetimeMillis;
+
             // check max content length
             if (content.get().length > this.maxContentLength) return cors(req.response()).code(413).plain("Content too large");
 
@@ -285,10 +290,13 @@ public class Bytebin implements AutoCloseable {
             this.contentCache.put(key, future);
 
             // save the data to the filesystem
-            this.executor.execute(() -> this.loader.save(key, mediaType, content.get(), requiresCompression.get(), future));
+            this.executor.execute(() -> this.loader.save(key, mediaType, content.get(), expiry, requiresCompression.get(), future));
 
             // return the url location as plain content
-            return cors(req.response()).code(201).header("Location", key).json(U.map("key", key));
+            return cors(req.response()).code(201)
+                    .header("Location", key)
+                    .header("Expiry", DateTimeFormatter.RFC_1123_DATE_TIME.format(Instant.ofEpochMilli(expiry).atOffset(ZoneOffset.UTC)))
+                    .json(U.map("key", key));
         });
 
         // serve content
@@ -320,11 +328,14 @@ public class Bytebin implements AutoCloseable {
                     return;
                 }
 
+                String expiryTime = DateTimeFormatter.RFC_1123_DATE_TIME.format(Instant.ofEpochMilli(content.expiry).atOffset(ZoneOffset.UTC));
+
                 // will the client accept the content in a compressed form?
                 if (supportsCompression) {
                     cors(req.response()).code(200)
                             .header("Cache-Control", "public, max-age=86400")
                             .header("Content-Encoding", "gzip")
+                            .header("Expires", expiryTime)
                             .body(content.content)
                             .contentType(content.mediaType)
                             .done();
@@ -343,6 +354,7 @@ public class Bytebin implements AutoCloseable {
                 // return the data
                 cors(req.response()).code(200)
                         .header("Cache-Control", "public, max-age=86400")
+                        .header("Expires", expiryTime)
                         .body(uncompressed)
                         .contentType(content.mediaType)
                         .done();
@@ -495,12 +507,10 @@ public class Bytebin implements AutoCloseable {
             }
         }
 
-        public void save(String key, MediaType mediaType, byte[] content, boolean requiresCompression, CompletableFuture<Content> future) {
+        public void save(String key, MediaType mediaType, byte[] content, long expiry, boolean requiresCompression, CompletableFuture<Content> future) {
             if (requiresCompression) {
                 content = compress(content);
             }
-
-            long expiry = System.currentTimeMillis() + Bytebin.this.lifetimeMillis;
 
             // add directly to the cache
             // it's quite likely that the file will be requested only a few seconds after it is uploaded
