@@ -37,7 +37,6 @@ import com.google.common.util.concurrent.ThreadFactoryBuilder;
 import com.google.gson.Gson;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
-
 import org.rapidoid.http.MediaType;
 import org.rapidoid.http.Req;
 import org.rapidoid.http.Resp;
@@ -408,7 +407,7 @@ public class Bytebin implements AutoCloseable {
                 .header("Access-Control-Max-Age", "86400")
                 .header("Access-Control-Allow-Headers", "Content-Type")
                 .code(200)
-                .body(new byte[0])
+                .body(EMPTY_BYTES)
         );
     }
 
