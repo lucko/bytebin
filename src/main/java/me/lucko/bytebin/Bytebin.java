@@ -52,6 +52,8 @@ import java.io.DataInputStream;
 import java.io.DataOutputStream;
 import java.io.IOException;
 import java.io.InputStreamReader;
+import java.net.InetAddress;
+import java.net.UnknownHostException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.FileAlreadyExistsException;
 import java.nio.file.Files;
@@ -65,7 +67,10 @@ import java.time.ZoneOffset;
 import java.time.format.DateTimeFormatter;
 import java.util.Arrays;
 import java.util.Date;
+import java.util.HashMap;
+import java.util.Map;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
@@ -120,6 +125,9 @@ public class Bytebin implements AutoCloseable {
     /** Executor service for performing file based i/o */
     private final ScheduledExecutorService executor;
 
+    /** Executor service used for logging. */
+    private final ExecutorService loggingExecutor;
+
     /** Content cache - caches the raw byte data for the last x requested files */
     private final AsyncLoadingCache<String, Content> contentCache;
 
@@ -163,6 +171,7 @@ public class Bytebin implements AutoCloseable {
                 config.getInt("corePoolSize", 16),
                 new ThreadFactoryBuilder().setNameFormat("bytebin-io-%d").build()
         );
+        this.loggingExecutor = Executors.newSingleThreadExecutor(new ThreadFactoryBuilder().setNameFormat("bytebin-logging-%d").build());
 
         // setup loader
         this.loader = new ContentLoader();
@@ -275,14 +284,27 @@ public class Bytebin implements AutoCloseable {
             // check max content length
             if (content.get().length > this.maxContentLength) return cors(req.response()).code(413).plain("Content too large");
 
-            this.logger.info("[POST]");
-            this.logger.info("    key = " + key);
-            this.logger.info("    type = " + new String(mediaType.getBytes()));
-            this.logger.info("    user agent = " + req.header("User-Agent", "null"));
-            this.logger.info("    ip address = " + ipAddress);
-            this.logger.info("    content size = " + String.format("%,d", content.get().length / 1024) + " KB");
-            this.logger.info("    compressed = " + !requiresCompression.get());
-            this.logger.info("");
+            this.loggingExecutor.submit(() -> {
+                String hostname = null;
+                try {
+                    InetAddress inetAddress = InetAddress.getByName(ipAddress);
+                    hostname = inetAddress.getCanonicalHostName();
+                    if (ipAddress.equals(hostname)) {
+                        hostname = null;
+                    }
+                } catch (Exception e) {
+                    // ignore
+                }
+
+                this.logger.info("[POST]");
+                this.logger.info("    key = " + key);
+                this.logger.info("    type = " + new String(mediaType.getBytes()));
+                this.logger.info("    user agent = " + req.header("User-Agent", "null"));
+                this.logger.info("    origin = " + ipAddress + (hostname != null ? " (" + hostname + ")" : ""));
+                this.logger.info("    content size = " + String.format("%,d", content.get().length / 1024) + " KB");
+                this.logger.info("    compressed = " + !requiresCompression.get());
+                this.logger.info("");
+            });
 
             // record the content in the cache
             CompletableFuture<Content> future = new CompletableFuture<>();
@@ -314,12 +336,25 @@ public class Bytebin implements AutoCloseable {
             // request the file from the cache async
             boolean supportsCompression = acceptsCompressed(req);
 
-            this.logger.info("[REQUEST]");
-            this.logger.info("    key = " + path);
-            this.logger.info("    user agent = " + req.header("User-Agent", "null"));
-            this.logger.info("    ip address = " + ipAddress);
-            this.logger.info("    supports compression = " + supportsCompression);
-            this.logger.info("");
+            this.loggingExecutor.submit(() -> {
+                String hostname = null;
+                try {
+                    InetAddress inetAddress = InetAddress.getByName(ipAddress);
+                    hostname = inetAddress.getCanonicalHostName();
+                    if (ipAddress.equals(hostname)) {
+                        hostname = null;
+                    }
+                } catch (Exception e) {
+                    // ignore
+                }
+
+                this.logger.info("[REQUEST]");
+                this.logger.info("    key = " + path);
+                this.logger.info("    user agent = " + req.header("User-Agent", "null"));
+                this.logger.info("    origin = " + ipAddress + (hostname != null ? " (" + hostname + ")" : ""));
+                this.logger.info("    supports compression = " + supportsCompression);
+                this.logger.info("");
+            });
 
             this.contentCache.get(path).whenCompleteAsync((content, throwable) -> {
                 if (throwable != null || content == null || content.key == null || content.content.length == 0) {
