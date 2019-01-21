@@ -37,6 +37,10 @@ import com.google.common.util.concurrent.ThreadFactoryBuilder;
 import com.google.gson.Gson;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
+import org.apache.logging.log4j.Level;
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
+import org.apache.logging.log4j.io.IoBuilder;
 import org.rapidoid.http.MediaType;
 import org.rapidoid.http.Req;
 import org.rapidoid.http.Resp;
@@ -53,7 +57,6 @@ import java.io.DataOutputStream;
 import java.io.IOException;
 import java.io.InputStreamReader;
 import java.net.InetAddress;
-import java.net.UnknownHostException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.FileAlreadyExistsException;
 import java.nio.file.Files;
@@ -61,14 +64,10 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.nio.file.StandardOpenOption;
 import java.security.SecureRandom;
-import java.text.DateFormat;
 import java.time.Instant;
 import java.time.ZoneOffset;
 import java.time.format.DateTimeFormatter;
 import java.util.Arrays;
-import java.util.Date;
-import java.util.HashMap;
-import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -77,11 +76,6 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
-import java.util.logging.ConsoleHandler;
-import java.util.logging.Formatter;
-import java.util.logging.Level;
-import java.util.logging.LogRecord;
-import java.util.logging.Logger;
 import java.util.regex.Pattern;
 import java.util.stream.Stream;
 import java.util.zip.GZIPInputStream;
@@ -92,8 +86,24 @@ import java.util.zip.GZIPOutputStream;
  */
 public class Bytebin implements AutoCloseable {
 
+    /** Empty byte array */
+    private static final byte[] EMPTY_BYTES = new byte[0];
+
+    /** Empty content instance */
+    private static final Content EMPTY_CONTENT = new Content(null, MediaType.TEXT_PLAIN, Long.MAX_VALUE, EMPTY_BYTES);
+
+    /** Number of bytes in a megabyte */
+    private static final long MEGABYTE_LENGTH = 1024L * 1024L;
+
+    /** Logger instance */
+    private static final Logger LOGGER = LogManager.getLogger(Bytebin.class);
+
     // Bootstrap
     public static void main(String[] args) throws Exception {
+        // setup logging
+        System.setOut(IoBuilder.forLogger(LOGGER).setLevel(Level.INFO).buildPrintStream());
+        System.setErr(IoBuilder.forLogger(LOGGER).setLevel(Level.ERROR).buildPrintStream());
+
         // load config
         Path configPath = Paths.get("config.json");
         Configuration config;
@@ -109,18 +119,6 @@ public class Bytebin implements AutoCloseable {
         Bytebin bytebin = new Bytebin(config);
         Runtime.getRuntime().addShutdownHook(new Thread(bytebin::close, "Bytebin Shutdown Thread"));
     }
-
-    /** Empty byte array */
-    private static final byte[] EMPTY_BYTES = new byte[0];
-
-    /** Empty content instance */
-    private static final Content EMPTY_CONTENT = new Content(null, MediaType.TEXT_PLAIN, Long.MAX_VALUE, EMPTY_BYTES);
-
-    /** Number of bytes in a megabyte */
-    private static final long MEGABYTE_LENGTH = 1024L * 1024L;
-
-    /** Logger instance */
-    private final Logger logger;
 
     /** Executor service for performing file based i/o */
     private final ScheduledExecutorService executor;
@@ -163,8 +161,7 @@ public class Bytebin implements AutoCloseable {
 
     public Bytebin(Configuration config) throws Exception {
         // setup simple logger
-        this.logger = createLogger();
-        this.logger.info("loading bytebin...");
+        LOGGER.info("loading bytebin...");
 
         // setup executor
         this.executor = Executors.newScheduledThreadPool(
@@ -296,14 +293,14 @@ public class Bytebin implements AutoCloseable {
                     // ignore
                 }
 
-                this.logger.info("[POST]");
-                this.logger.info("    key = " + key);
-                this.logger.info("    type = " + new String(mediaType.getBytes()));
-                this.logger.info("    user agent = " + req.header("User-Agent", "null"));
-                this.logger.info("    origin = " + ipAddress + (hostname != null ? " (" + hostname + ")" : ""));
-                this.logger.info("    content size = " + String.format("%,d", content.get().length / 1024) + " KB");
-                this.logger.info("    compressed = " + !requiresCompression.get());
-                this.logger.info("");
+                LOGGER.info("[POST]");
+                LOGGER.info("    key = " + key);
+                LOGGER.info("    type = " + new String(mediaType.getBytes()));
+                LOGGER.info("    user agent = " + req.header("User-Agent", "null"));
+                LOGGER.info("    origin = " + ipAddress + (hostname != null ? " (" + hostname + ")" : ""));
+                LOGGER.info("    content size = " + String.format("%,d", content.get().length / 1024) + " KB");
+                LOGGER.info("    compressed = " + !requiresCompression.get());
+                LOGGER.info("");
             });
 
             // record the content in the cache
@@ -348,12 +345,12 @@ public class Bytebin implements AutoCloseable {
                     // ignore
                 }
 
-                this.logger.info("[REQUEST]");
-                this.logger.info("    key = " + path);
-                this.logger.info("    user agent = " + req.header("User-Agent", "null"));
-                this.logger.info("    origin = " + ipAddress + (hostname != null ? " (" + hostname + ")" : ""));
-                this.logger.info("    supports compression = " + supportsCompression);
-                this.logger.info("");
+                LOGGER.info("[REQUEST]");
+                LOGGER.info("    key = " + path);
+                LOGGER.info("    user agent = " + req.header("User-Agent", "null"));
+                LOGGER.info("    origin = " + ipAddress + (hostname != null ? " (" + hostname + ")" : ""));
+                LOGGER.info("    supports compression = " + supportsCompression);
+                LOGGER.info("");
             });
 
             this.contentCache.get(path).whenCompleteAsync((content, throwable) -> {
@@ -411,29 +408,6 @@ public class Bytebin implements AutoCloseable {
         } catch (InterruptedException e) {
             e.printStackTrace();
         }
-
-    }
-
-    private static Logger createLogger() {
-        Logger logger = Logger.getLogger("bytebin");
-        logger.setLevel(Level.ALL);
-        logger.setUseParentHandlers(false);
-        ConsoleHandler consoleHandler = new ConsoleHandler();
-        consoleHandler.setFormatter(new Formatter() {
-            private final DateFormat dateFormat = DateFormat.getTimeInstance(DateFormat.MEDIUM);
-
-            @Override
-            public String format(LogRecord record) {
-                return String.format(
-                        "%s [%s] %s\n",
-                        this.dateFormat.format(new Date(record.getMillis())),
-                        record.getLevel().getName(),
-                        record.getMessage()
-                );
-            }
-        });
-        logger.addHandler(consoleHandler);
-        return logger;
     }
 
     private static void defineOptionsRoute(Setup setup, String path, String allowedMethod) {
@@ -488,7 +462,7 @@ public class Bytebin implements AutoCloseable {
 
         @Override
         public Content load(String path) throws IOException {
-            Bytebin.this.logger.info("[I/O] Loading " + path + " from disk");
+            LOGGER.info("[I/O] Loading " + path + " from disk");
 
             // resolve the path within the content dir
             Path resolved = Bytebin.this.contentPath.resolve(path);
@@ -571,7 +545,7 @@ public class Bytebin implements AutoCloseable {
                 out.write(content);
             } catch (IOException e) {
                 if (e instanceof FileAlreadyExistsException) {
-                    Bytebin.this.logger.info("File '" + key + "' already exists.");
+                    LOGGER.info("File '" + key + "' already exists.");
                     return;
                 }
                 e.printStackTrace();
@@ -642,7 +616,7 @@ public class Bytebin implements AutoCloseable {
                             try {
                                 Content content = Bytebin.this.loader.loadMeta(path);
                                 if (content.shouldExpire()) {
-                                    Bytebin.this.logger.info("Expired: " + path.getFileName().toString());
+                                    LOGGER.info("Expired: " + path.getFileName().toString());
                                     Files.delete(path);
                                 }
                             } catch (Exception e) {
