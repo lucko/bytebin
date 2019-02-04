@@ -233,7 +233,10 @@ public class Bytebin implements AutoCloseable {
         server.address(this.host).port(this.port);
 
         // catch all errors & just return some generic error message
-        server.custom().errorHandler((req, resp, error) -> cors(resp).code(404).plain("Invalid path"));
+        server.custom().errorHandler((req, resp, error) -> {
+            LOGGER.error("Error thrown by handler", error);
+            return cors(resp).code(404).plain("Invalid path");
+        });
 
         // define option route handlers
         defineOptionsRoute(server, "/post", "POST");
