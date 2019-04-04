@@ -37,6 +37,7 @@ import com.google.common.util.concurrent.ThreadFactoryBuilder;
 import com.google.gson.Gson;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
+
 import org.apache.logging.log4j.Level;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
@@ -54,6 +55,7 @@ import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.DataInputStream;
 import java.io.DataOutputStream;
+import java.io.EOFException;
 import java.io.IOException;
 import java.io.InputStreamReader;
 import java.net.InetAddress;
@@ -546,11 +548,9 @@ public class Bytebin implements AutoCloseable {
                 // write content
                 out.writeInt(content.length);
                 out.write(content);
+            } catch (FileAlreadyExistsException e) {
+                LOGGER.info("File '" + key + "' already exists.");
             } catch (IOException e) {
-                if (e instanceof FileAlreadyExistsException) {
-                    LOGGER.info("File '" + key + "' already exists.");
-                    return;
-                }
                 e.printStackTrace();
             }
         }
@@ -621,6 +621,13 @@ public class Bytebin implements AutoCloseable {
                                 if (content.shouldExpire()) {
                                     LOGGER.info("Expired: " + path.getFileName().toString());
                                     Files.delete(path);
+                                }
+                            } catch (EOFException e) {
+                                LOGGER.info("Corrupted: " + path.getFileName().toString());
+                                try {
+                                    Files.delete(path);
+                                } catch (IOException e2) {
+                                    // ignore
                                 }
                             } catch (Exception e) {
                                 e.printStackTrace();
