@@ -138,7 +138,7 @@ public final class Bytebin implements AutoCloseable {
         try {
             this.executor.awaitTermination(30, TimeUnit.SECONDS);
         } catch (InterruptedException e) {
-            e.printStackTrace();
+            LOGGER.error("Exception whilst shutting down executor", e);
         }
     }
 

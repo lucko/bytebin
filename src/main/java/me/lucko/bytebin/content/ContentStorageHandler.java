@@ -75,15 +75,20 @@ public class ContentStorageHandler implements CacheLoader<String, Content> {
     }
 
     @Override
-    public Content load(String path) throws IOException {
+    public Content load(String path) throws Exception {
         LOGGER.info("[I/O] Loading " + path + " from disk");
 
         // resolve the path within the content dir
-        Path resolved = this.contentPath.resolve(path);
-        return load(resolved);
+        try {
+            Path resolved = this.contentPath.resolve(path);
+            return load(resolved);
+        } catch (Exception e) {
+            LOGGER.error("Exception occurred loading '" + path + "'", e);
+            throw e; // rethrow
+        }
     }
 
-    public Content load(Path resolved) throws IOException {
+    private Content load(Path resolved) throws IOException {
         if (!Files.exists(resolved)) {
             return Content.EMPTY_CONTENT;
         }
@@ -160,7 +165,7 @@ public class ContentStorageHandler implements CacheLoader<String, Content> {
         } catch (FileAlreadyExistsException e) {
             LOGGER.info("File '" + key + "' already exists.");
         } catch (IOException e) {
-            e.printStackTrace();
+            LOGGER.error("Exception occurred saving '" + path + "'", e);
         }
     }
 
@@ -182,11 +187,11 @@ public class ContentStorageHandler implements CacheLoader<String, Content> {
                                 // ignore
                             }
                         } catch (Exception e) {
-                            e.printStackTrace();
+                            LOGGER.error("Exception occurred loading meta for '" + path.getFileName().toString() + "'", e);
                         }
                     });
         } catch (IOException e) {
-            e.printStackTrace();
+            LOGGER.error("Exception thrown whilst invalidating", e);
         }
     }
 }
