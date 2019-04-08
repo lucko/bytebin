@@ -2,12 +2,12 @@
 <Configuration status="warn">
     <Appenders>
         <Console name="Console">
-            <PatternLayout pattern="%highlight{[%d{HH:mm:ss} %level] [%logger]: %msg%n%xEx}"/>
+            <PatternLayout pattern="%highlight{[%d{HH:mm:ss} %level]: %msg%n%xEx}"/>
         </Console>
         <RollingRandomAccessFile name="File" fileName="logs/latest.log"
                                  filePattern="logs/%d{yyyy-MM-dd}-%i.log.gz"
                                  immediateFlush="false">
-            <PatternLayout pattern="[%d{HH:mm:ss} %level] [%logger]: %msg{strip}%n"/>
+            <PatternLayout pattern="[%d{HH:mm:ss} %level]: %msg{strip}%n"/>
             <Policies>
                 <TimeBasedTriggeringPolicy/>
                 <OnStartupTriggeringPolicy/>
