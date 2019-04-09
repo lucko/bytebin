@@ -34,6 +34,7 @@ import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.rapidoid.http.Req;
 import org.rapidoid.http.ReqHandler;
+import org.rapidoid.http.Resp;
 
 import java.io.IOException;
 import java.net.InetAddress;
@@ -100,14 +101,19 @@ public final class GetHandler implements ReqHandler {
                 return;
             }
 
-            String expiryTime = DateTimeFormatter.RFC_1123_DATE_TIME.format(Instant.ofEpochMilli(content.getExpiry()).atOffset(ZoneOffset.UTC));
+            String lastModifiedTime = DateTimeFormatter.RFC_1123_DATE_TIME.format(Instant.ofEpochMilli(content.getLastModified()).atOffset(ZoneOffset.UTC));
+
+            Resp resp = cors(req.response()).code(200).header("Last-Modified", lastModifiedTime);
+
+            if (content.isModifiable()) {
+                resp.header("Cache-Control", "no-cache");
+            } else {
+                resp.header("Cache-Control", "public, max-age=86400");
+            }
 
             // will the client accept the content in a compressed form?
             if (supportsCompression) {
-                cors(req.response()).code(200)
-                        .header("Cache-Control", "public, max-age=86400")
-                        .header("Content-Encoding", "gzip")
-                        .header("Expires", expiryTime)
+                resp.header("Content-Encoding", "gzip")
                         .body(content.getContent())
                         .contentType(content.getMediaType())
                         .done();
@@ -124,10 +130,7 @@ public final class GetHandler implements ReqHandler {
             }
 
             // return the data
-            cors(req.response()).code(200)
-                    .header("Cache-Control", "public, max-age=86400")
-                    .header("Expires", expiryTime)
-                    .body(uncompressed)
+            resp.body(uncompressed)
                     .contentType(content.getMediaType())
                     .done();
         });

@@ -113,12 +113,19 @@ public final class Bytebin implements AutoCloseable {
                 System.getProperty("server.host", config.getString("host", "127.0.0.1")),
                 Integer.getInteger("server.port", config.getInt("port", 8080)),
                 new RateLimiter(
+                        // by default, allow posts at a rate of 3 times per min (every 20s)
                         config.getInt("postRateLimitPeriodMins", 10),
                         config.getInt("postRateLimit", 30)
                 ),
                 new RateLimiter(
-                        config.getInt("readRateLimitPeriodMins", 10),
-                        config.getInt("readRateLimit", 100)
+                        // by default, allow updates at a rate of 15 times per min (every 4s)
+                        config.getInt("updateRateLimitPeriodMins", 2),
+                        config.getInt("updateRateLimit", 26)
+                ),
+                new RateLimiter(
+                        // by default, allow reads at a rate of 15 times per min (every 4s)
+                        config.getInt("readRateLimitPeriodMins", 2),
+                        config.getInt("readRateLimit", 30)
                 ),
                 indexPage,
                 new TokenGenerator(config.getInt("keyLength", 7)),

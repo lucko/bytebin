@@ -54,7 +54,7 @@ public class BytebinServer {
 
     private final Setup server;
 
-    public BytebinServer(ContentStorageHandler contentStorageHandler, ContentCache contentCache, String host, int port, RateLimiter postRateLimiter, RateLimiter readRateLimiter, byte[] indexPage, TokenGenerator tokenGenerator, long maxContentLength, long lifetimeMillis) {
+    public BytebinServer(ContentStorageHandler contentStorageHandler, ContentCache contentCache, String host, int port, RateLimiter postRateLimiter, RateLimiter putRateLimiter, RateLimiter readRateLimiter, byte[] indexPage, TokenGenerator contentTokenGenerator, long maxContentLength, long lifetimeMillis) {
         this.server = Setup.create("bytebin");
         this.server.address(host).port(port);
 
@@ -68,8 +68,9 @@ public class BytebinServer {
         defineOptionsRoute(this.server, "/post", "POST");
         defineOptionsRoute(this.server, "/*", "GET");
         this.server.page("/").html(indexPage);
-        this.server.post("/post").managed(false).serve(new PostHandler(this, postRateLimiter, contentStorageHandler, contentCache, tokenGenerator, maxContentLength, lifetimeMillis));
+        this.server.post("/post").managed(false).serve(new PostHandler(this, postRateLimiter, contentStorageHandler, contentCache, contentTokenGenerator, maxContentLength, lifetimeMillis));
         this.server.get("/*").managed(false).cacheCapacity(0).serve(new GetHandler(this, readRateLimiter, contentCache));
+        this.server.put("/*").managed(false).cacheCapacity(0).serve(new PutHandler(this, putRateLimiter, contentStorageHandler, contentCache, maxContentLength, lifetimeMillis));
     }
 
     public ExecutorService getLoggingExecutor() {

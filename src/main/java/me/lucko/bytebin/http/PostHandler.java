@@ -37,12 +37,10 @@ import org.apache.logging.log4j.Logger;
 import org.rapidoid.http.MediaType;
 import org.rapidoid.http.Req;
 import org.rapidoid.http.ReqHandler;
+import org.rapidoid.http.Resp;
 import org.rapidoid.u.U;
 
 import java.net.InetAddress;
-import java.time.Instant;
-import java.time.ZoneOffset;
-import java.time.format.DateTimeFormatter;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
@@ -59,16 +57,18 @@ public final class PostHandler implements ReqHandler {
 
     private final ContentStorageHandler contentStorageHandler;
     private final ContentCache contentCache;
-    private final TokenGenerator tokenGenerator;
+    private final TokenGenerator contentTokenGenerator;
+    private final TokenGenerator authKeyTokenGenerator;
     private final long maxContentLength;
     private final long lifetimeMillis;
 
-    public PostHandler(BytebinServer server, RateLimiter rateLimiter, ContentStorageHandler contentStorageHandler, ContentCache contentCache, TokenGenerator tokenGenerator, long maxContentLength, long lifetimeMillis) {
+    public PostHandler(BytebinServer server, RateLimiter rateLimiter, ContentStorageHandler contentStorageHandler, ContentCache contentCache, TokenGenerator contentTokenGenerator, long maxContentLength, long lifetimeMillis) {
         this.server = server;
         this.rateLimiter = rateLimiter;
         this.contentStorageHandler = contentStorageHandler;
         this.contentCache = contentCache;
-        this.tokenGenerator = tokenGenerator;
+        this.contentTokenGenerator = contentTokenGenerator;
+        this.authKeyTokenGenerator = new TokenGenerator(32);
         this.maxContentLength = maxContentLength;
         this.lifetimeMillis = lifetimeMillis;
     }
@@ -88,7 +88,7 @@ public final class PostHandler implements ReqHandler {
         MediaType mediaType = determineMediaType(req);
 
         // generate a key
-        String key = this.tokenGenerator.generate();
+        String key = this.contentTokenGenerator.generate();
 
         // is the content already compressed?
         boolean compressed = req.header("Content-Encoding", "").equals("gzip");
@@ -112,6 +112,15 @@ public final class PostHandler implements ReqHandler {
         // check max content length
         if (content.get().length > this.maxContentLength) return cors(req.response()).code(413).plain("Content too large");
 
+        // check for our custom Allow-Modification header
+        boolean allowModifications = Boolean.parseBoolean(req.header("Allow-Modification", "false"));
+        String authKey;
+        if (allowModifications) {
+            authKey = this.authKeyTokenGenerator.generate();
+        } else {
+            authKey = null;
+        }
+
         this.server.getLoggingExecutor().submit(() -> {
             String hostname = null;
             try {
@@ -131,6 +140,7 @@ public final class PostHandler implements ReqHandler {
             LOGGER.info("    origin = " + ipAddress + (hostname != null ? " (" + hostname + ")" : ""));
             LOGGER.info("    content size = " + String.format("%,d", content.get().length / 1024) + " KB");
             LOGGER.info("    compressed = " + !requiresCompression.get());
+            LOGGER.info("    allow modification = " + allowModifications);
             LOGGER.info("");
         });
 
@@ -139,13 +149,16 @@ public final class PostHandler implements ReqHandler {
         this.contentCache.put(key, future);
 
         // save the data to the filesystem
-        this.contentStorageHandler.getExecutor().execute(() -> this.contentStorageHandler.save(key, mediaType, content.get(), expiry, requiresCompression.get(), future));
+        this.contentStorageHandler.getExecutor().execute(() -> this.contentStorageHandler.save(key, mediaType, content.get(), expiry, authKey, requiresCompression.get(), future));
 
         // return the url location as plain content
-        return cors(req.response()).code(201)
-                .header("Location", key)
-                .header("Expiry", DateTimeFormatter.RFC_1123_DATE_TIME.format(Instant.ofEpochMilli(expiry).atOffset(ZoneOffset.UTC)))
-                .json(U.map("key", key));
+        Resp resp = cors(req.response()).code(201).header("Location", key);
+
+        if (allowModifications) {
+            resp.header("Modification-Key", authKey);
+        }
+
+        return resp.json(U.map("key", key));
     }
 
     private static MediaType determineMediaType(Req req) {

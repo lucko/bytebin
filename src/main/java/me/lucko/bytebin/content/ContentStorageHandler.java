@@ -39,10 +39,8 @@ import java.io.DataInputStream;
 import java.io.DataOutputStream;
 import java.io.EOFException;
 import java.io.IOException;
-import java.nio.file.FileAlreadyExistsException;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.nio.file.StandardOpenOption;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.stream.Stream;
@@ -94,6 +92,9 @@ public class ContentStorageHandler implements CacheLoader<String, Content> {
         }
 
         try (DataInputStream in = new DataInputStream(Files.newInputStream(resolved))) {
+            // read version
+            int version = in.readInt();
+
             // read key
             String key = in.readUTF();
 
@@ -105,11 +106,21 @@ public class ContentStorageHandler implements CacheLoader<String, Content> {
             // read expiry
             long expiry = in.readLong();
 
+            // read last modified time
+            long lastModified = in.readLong();
+
+            // read modifiable state data
+            boolean modifiable = in.readBoolean();
+            String authKey = null;
+            if (modifiable) {
+                authKey = in.readUTF();
+            }
+
             // read content
             byte[] content = new byte[in.readInt()];
             in.readFully(content);
 
-            return new Content(key, mediaType, expiry, content);
+            return new Content(key, mediaType, expiry, lastModified, modifiable, authKey, content);
         }
     }
 
@@ -119,6 +130,9 @@ public class ContentStorageHandler implements CacheLoader<String, Content> {
         }
 
         try (DataInputStream in = new DataInputStream(new BufferedInputStream(Files.newInputStream(resolved)))) {
+            // read version
+            int version = in.readInt();
+
             // read key
             String key = in.readUTF();
 
@@ -130,40 +144,64 @@ public class ContentStorageHandler implements CacheLoader<String, Content> {
             // read expiry
             long expiry = in.readLong();
 
-            return new Content(key, mediaType, expiry, Content.EMPTY_BYTES);
+            // read last modified time
+            long lastModified = in.readLong();
+
+            // read modifiable state data
+            boolean modifiable = in.readBoolean();
+            String authKey = null;
+            if (modifiable) {
+                authKey = in.readUTF();
+            }
+
+            return new Content(key, mediaType, expiry, lastModified, modifiable, authKey, Content.EMPTY_BYTES);
         }
     }
 
-    public void save(String key, MediaType mediaType, byte[] content, long expiry, boolean requiresCompression, CompletableFuture<Content> future) {
+    public void save(String key, MediaType mediaType, byte[] content, long expiry, String authKey, boolean requiresCompression, CompletableFuture<Content> future) {
         if (requiresCompression) {
             content = Compression.compress(content);
         }
 
         // add directly to the cache
         // it's quite likely that the file will be requested only a few seconds after it is uploaded
-        Content c = new Content(key, mediaType, expiry, content);
+        Content c = new Content(key, mediaType, expiry, System.currentTimeMillis(), authKey != null, authKey, content);
         future.complete(c);
 
-        // resolve the path to save at
-        Path path = this.contentPath.resolve(key);
+        save(c);
+    }
 
-        try (DataOutputStream out = new DataOutputStream(new BufferedOutputStream(Files.newOutputStream(path, StandardOpenOption.CREATE_NEW)))) {
+    public void save(Content c) {
+        // resolve the path to save at
+        Path path = this.contentPath.resolve(c.getKey());
+
+        try (DataOutputStream out = new DataOutputStream(new BufferedOutputStream(Files.newOutputStream(path)))) {
+            // write version
+            out.writeInt(1);
+
             // write name
-            out.writeUTF(key);
+            out.writeUTF(c.getKey());
 
             // write content type
-            byte[] contextType = mediaType.getBytes();
+            byte[] contextType = c.getMediaType().getBytes();
             out.writeInt(contextType.length);
             out.write(contextType);
 
             // write expiry time
-            out.writeLong(expiry);
+            out.writeLong(c.getExpiry());
+
+            // write last modified
+            out.writeLong(c.getLastModified());
+
+            // write modifiable state data
+            out.writeBoolean(c.isModifiable());
+            if (c.isModifiable()) {
+                out.writeUTF(c.getAuthKey());
+            }
 
             // write content
-            out.writeInt(content.length);
-            out.write(content);
-        } catch (FileAlreadyExistsException e) {
-            LOGGER.info("File '" + key + "' already exists.");
+            out.writeInt(c.getContent().length);
+            out.write(c.getContent());
         } catch (IOException e) {
             LOGGER.error("Exception occurred saving '" + path + "'", e);
         }
