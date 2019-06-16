@@ -31,10 +31,8 @@ import me.lucko.bytebin.content.ContentStorageHandler;
 import me.lucko.bytebin.util.Compression;
 import me.lucko.bytebin.util.RateLimiter;
 import me.lucko.bytebin.util.TokenGenerator;
-
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
-import org.rapidoid.http.MediaType;
 import org.rapidoid.http.Req;
 import org.rapidoid.http.ReqHandler;
 import org.rapidoid.http.Resp;
@@ -45,7 +43,7 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
 
-import static me.lucko.bytebin.http.BytebinServer.cors;
+import static me.lucko.bytebin.http.BytebinServer.*;
 
 public final class PostHandler implements ReqHandler {
 
@@ -84,8 +82,8 @@ public final class PostHandler implements ReqHandler {
         // check rate limits
         if (this.rateLimiter.check(ipAddress)) return cors(req.response()).code(429).plain("Rate limit exceeded");
 
-        // determine the mediatype
-        MediaType mediaType = determineMediaType(req);
+        // determine the content type
+        String contentType = req.header("Content-Type", "text/plain");
 
         // generate a key
         String key = this.contentTokenGenerator.generate();
@@ -135,7 +133,7 @@ public final class PostHandler implements ReqHandler {
 
             LOGGER.info("[POST]");
             LOGGER.info("    key = " + key);
-            LOGGER.info("    type = " + new String(mediaType.getBytes()));
+            LOGGER.info("    type = " + contentType);
             LOGGER.info("    user agent = " + req.header("User-Agent", "null"));
             LOGGER.info("    origin = " + ipAddress + (hostname != null ? " (" + hostname + ")" : ""));
             LOGGER.info("    content size = " + String.format("%,d", content.get().length / 1024) + " KB");
@@ -149,7 +147,7 @@ public final class PostHandler implements ReqHandler {
         this.contentCache.put(key, future);
 
         // save the data to the filesystem
-        this.contentStorageHandler.getExecutor().execute(() -> this.contentStorageHandler.save(key, mediaType, content.get(), expiry, authKey, requiresCompression.get(), future));
+        this.contentStorageHandler.getExecutor().execute(() -> this.contentStorageHandler.save(key, contentType, content.get(), expiry, authKey, requiresCompression.get(), future));
 
         // return the url location as plain content
         Resp resp = cors(req.response()).code(201).header("Location", key);
@@ -159,14 +157,6 @@ public final class PostHandler implements ReqHandler {
         }
 
         return resp.json(U.map("key", key));
-    }
-
-    private static MediaType determineMediaType(Req req) {
-        MediaType mt = req.contentType();
-        if (mt == null) {
-            mt = MediaType.TEXT_PLAIN;
-        }
-        return mt;
     }
 
 }

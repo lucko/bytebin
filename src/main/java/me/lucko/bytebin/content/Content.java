@@ -25,8 +25,6 @@
 
 package me.lucko.bytebin.content;
 
-import org.rapidoid.http.MediaType;
-
 /**
  * Encapsulates content within the service
  */
@@ -36,22 +34,22 @@ public final class Content {
     public static final byte[] EMPTY_BYTES = new byte[0];
 
     /** Empty content instance */
-    public static final Content EMPTY_CONTENT = new Content(null, MediaType.TEXT_PLAIN, Long.MAX_VALUE, Long.MIN_VALUE, false, null, EMPTY_BYTES);
+    public static final Content EMPTY_CONTENT = new Content(null, "text/plain", Long.MAX_VALUE, Long.MIN_VALUE, false, null, EMPTY_BYTES);
 
     /** Number of bytes in a megabyte */
     public static final long MEGABYTE_LENGTH = 1024L * 1024L;
 
     private final String key;
-    private MediaType mediaType;
+    private String contentType;
     private long expiry;
     private long lastModified;
     private final boolean modifiable;
     private final String authKey;
     private byte[] content;
 
-    public Content(String key, MediaType mediaType, long expiry, long lastModified, boolean modifiable, String authKey, byte[] content) {
+    public Content(String key, String contentType, long expiry, long lastModified, boolean modifiable, String authKey, byte[] content) {
         this.key = key;
-        this.mediaType = mediaType;
+        this.contentType = contentType;
         this.expiry = expiry;
         this.lastModified = lastModified;
         this.modifiable = modifiable;
@@ -63,12 +61,12 @@ public final class Content {
         return this.key;
     }
 
-    public MediaType getMediaType() {
-        return this.mediaType;
+    public String getContentType() {
+        return this.contentType;
     }
 
-    public void setMediaType(MediaType mediaType) {
-        this.mediaType = mediaType;
+    public void setContentType(String contentType) {
+        this.contentType = contentType;
     }
 
     public long getExpiry() {

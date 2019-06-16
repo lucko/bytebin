@@ -26,12 +26,9 @@
 package me.lucko.bytebin.content;
 
 import com.github.benmanes.caffeine.cache.CacheLoader;
-
 import me.lucko.bytebin.util.Compression;
-
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
-import org.rapidoid.http.MediaType;
 
 import java.io.BufferedInputStream;
 import java.io.BufferedOutputStream;
@@ -99,9 +96,9 @@ public class ContentStorageHandler implements CacheLoader<String, Content> {
             String key = in.readUTF();
 
             // read content type
-            byte[] contentType = new byte[in.readInt()];
-            in.readFully(contentType);
-            MediaType mediaType = MediaType.of(new String(contentType));
+            byte[] contentTypeBytes = new byte[in.readInt()];
+            in.readFully(contentTypeBytes);
+            String contentType = new String(contentTypeBytes);
 
             // read expiry
             long expiry = in.readLong();
@@ -120,7 +117,7 @@ public class ContentStorageHandler implements CacheLoader<String, Content> {
             byte[] content = new byte[in.readInt()];
             in.readFully(content);
 
-            return new Content(key, mediaType, expiry, lastModified, modifiable, authKey, content);
+            return new Content(key, contentType, expiry, lastModified, modifiable, authKey, content);
         }
     }
 
@@ -137,9 +134,9 @@ public class ContentStorageHandler implements CacheLoader<String, Content> {
             String key = in.readUTF();
 
             // read content type
-            byte[] contentType = new byte[in.readInt()];
-            in.readFully(contentType);
-            MediaType mediaType = MediaType.of(new String(contentType));
+            byte[] contentTypeBytes = new byte[in.readInt()];
+            in.readFully(contentTypeBytes);
+            String contentType = new String(contentTypeBytes);
 
             // read expiry
             long expiry = in.readLong();
@@ -154,18 +151,18 @@ public class ContentStorageHandler implements CacheLoader<String, Content> {
                 authKey = in.readUTF();
             }
 
-            return new Content(key, mediaType, expiry, lastModified, modifiable, authKey, Content.EMPTY_BYTES);
+            return new Content(key, contentType, expiry, lastModified, modifiable, authKey, Content.EMPTY_BYTES);
         }
     }
 
-    public void save(String key, MediaType mediaType, byte[] content, long expiry, String authKey, boolean requiresCompression, CompletableFuture<Content> future) {
+    public void save(String key, String contentType, byte[] content, long expiry, String authKey, boolean requiresCompression, CompletableFuture<Content> future) {
         if (requiresCompression) {
             content = Compression.compress(content);
         }
 
         // add directly to the cache
         // it's quite likely that the file will be requested only a few seconds after it is uploaded
-        Content c = new Content(key, mediaType, expiry, System.currentTimeMillis(), authKey != null, authKey, content);
+        Content c = new Content(key, contentType, expiry, System.currentTimeMillis(), authKey != null, authKey, content);
         future.complete(c);
 
         save(c);
@@ -183,7 +180,7 @@ public class ContentStorageHandler implements CacheLoader<String, Content> {
             out.writeUTF(c.getKey());
 
             // write content type
-            byte[] contextType = c.getMediaType().getBytes();
+            byte[] contextType = c.getContentType().getBytes();
             out.writeInt(contextType.length);
             out.write(contextType);
 

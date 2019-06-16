@@ -31,17 +31,15 @@ import me.lucko.bytebin.content.ContentStorageHandler;
 import me.lucko.bytebin.util.Compression;
 import me.lucko.bytebin.util.RateLimiter;
 import me.lucko.bytebin.util.TokenGenerator;
-
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
-import org.rapidoid.http.MediaType;
 import org.rapidoid.http.Req;
 import org.rapidoid.http.ReqHandler;
 
 import java.net.InetAddress;
 import java.util.concurrent.atomic.AtomicReference;
 
-import static me.lucko.bytebin.http.BytebinServer.cors;
+import static me.lucko.bytebin.http.BytebinServer.*;
 
 public final class PutHandler implements ReqHandler {
 
@@ -107,8 +105,8 @@ public final class PutHandler implements ReqHandler {
                 return;
             }
 
-            // determine the new mediatype
-            MediaType newMediaType = determineMediaType(req, oldContent.getMediaType());
+            // determine the new content type
+            String newContentType = req.header("Content-Type", oldContent.getContentType());
 
             // compress if necessary
             boolean compressed = req.header("Content-Encoding", "").equals("gzip");
@@ -138,7 +136,7 @@ public final class PutHandler implements ReqHandler {
 
                 LOGGER.info("[PUT]");
                 LOGGER.info("    key = " + path);
-                LOGGER.info("    new type = " + new String(newMediaType.getBytes()));
+                LOGGER.info("    new type = " + new String(newContentType.getBytes()));
                 LOGGER.info("    user agent = " + req.header("User-Agent", "null"));
                 LOGGER.info("    origin = " + ipAddress + (hostname != null ? " (" + hostname + ")" : ""));
                 LOGGER.info("    old content size = " + String.format("%,d", oldContent.getContent().length / 1024) + " KB");
@@ -147,7 +145,7 @@ public final class PutHandler implements ReqHandler {
             });
 
             // update the content instance with the new data
-            oldContent.setMediaType(newMediaType);
+            oldContent.setContentType(newContentType);
             oldContent.setExpiry(newExpiry);
             oldContent.setLastModified(System.currentTimeMillis());
             oldContent.setContent(newContent.get());
@@ -163,11 +161,6 @@ public final class PutHandler implements ReqHandler {
 
         // mark that we're going to respond later
         return req.async();
-    }
-
-    private static MediaType determineMediaType(Req req, MediaType fallback) {
-        MediaType mt = req.contentType();
-        return mt != null ? mt : fallback;
     }
 
 }

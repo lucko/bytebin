@@ -29,9 +29,9 @@ import me.lucko.bytebin.content.ContentCache;
 import me.lucko.bytebin.util.Compression;
 import me.lucko.bytebin.util.RateLimiter;
 import me.lucko.bytebin.util.TokenGenerator;
-
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
+import org.rapidoid.http.MediaType;
 import org.rapidoid.http.Req;
 import org.rapidoid.http.ReqHandler;
 import org.rapidoid.http.Resp;
@@ -42,7 +42,7 @@ import java.time.Instant;
 import java.time.ZoneOffset;
 import java.time.format.DateTimeFormatter;
 
-import static me.lucko.bytebin.http.BytebinServer.cors;
+import static me.lucko.bytebin.http.BytebinServer.*;
 
 public final class GetHandler implements ReqHandler {
 
@@ -115,7 +115,7 @@ public final class GetHandler implements ReqHandler {
             if (supportsCompression) {
                 resp.header("Content-Encoding", "gzip")
                         .body(content.getContent())
-                        .contentType(content.getMediaType())
+                        .contentType(MediaType.of(content.getContentType()))
                         .done();
                 return;
             }
@@ -131,7 +131,7 @@ public final class GetHandler implements ReqHandler {
 
             // return the data
             resp.body(uncompressed)
-                    .contentType(content.getMediaType())
+                    .contentType(MediaType.of(content.getContentType()))
                     .done();
         });
 
