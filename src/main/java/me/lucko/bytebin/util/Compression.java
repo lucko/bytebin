@@ -25,27 +25,25 @@
 
 package me.lucko.bytebin.util;
 
+import com.google.common.base.Splitter;
+import com.google.common.collect.Iterables;
 import com.google.common.io.ByteStreams;
-
 import org.rapidoid.http.Req;
 
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
-import java.util.Arrays;
 import java.util.zip.GZIPInputStream;
 import java.util.zip.GZIPOutputStream;
 
 public final class Compression {
     private Compression() {}
 
+    private static final Splitter COMMA_SPLITTER = Splitter.on(", ");
+
     public static boolean acceptsCompressed(Req req) {
-        boolean acceptCompressed = false;
         String header = req.header("Accept-Encoding", null);
-        if (header != null && Arrays.stream(header.split(", ")).anyMatch(s -> s.equals("gzip"))) {
-            acceptCompressed = true;
-        }
-        return acceptCompressed;
+        return header != null && Iterables.contains(COMMA_SPLITTER.split(header), "gzip");
     }
 
     public static byte[] compress(byte[] buf) {
