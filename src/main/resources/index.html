@@ -63,6 +63,7 @@
             $.ajax("post", {
                 data: content,
                 method: "POST",
+                contentType: "text/plain",
                 success: function(data) {
                     $(location).attr("href", data["key"]);
                 }
