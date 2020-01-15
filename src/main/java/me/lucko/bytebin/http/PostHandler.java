@@ -135,10 +135,16 @@ public final class PostHandler implements ReqHandler {
             LOGGER.info("    key = " + key);
             LOGGER.info("    type = " + contentType);
             LOGGER.info("    user agent = " + req.header("User-Agent", "null"));
-            LOGGER.info("    origin = " + ipAddress + (hostname != null ? " (" + hostname + ")" : ""));
+            String origin = req.header("Origin", null);
+            if (origin != null) {
+                LOGGER.info("    origin = " + origin);
+            }
+            LOGGER.info("    origin ip = " + ipAddress + (hostname != null ? " (" + hostname + ")" : ""));
             LOGGER.info("    content size = " + String.format("%,d", content.get().length / 1024) + " KB");
             LOGGER.info("    compressed = " + !requiresCompression.get());
-            LOGGER.info("    allow modification = " + allowModifications);
+            if (allowModifications) {
+                LOGGER.info("    allow modification = true");
+            }
             LOGGER.info("");
         });
 

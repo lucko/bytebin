@@ -90,7 +90,11 @@ public final class GetHandler implements ReqHandler {
             LOGGER.info("[REQUEST]");
             LOGGER.info("    key = " + path);
             LOGGER.info("    user agent = " + req.header("User-Agent", "null"));
-            LOGGER.info("    origin = " + ipAddress + (hostname != null ? " (" + hostname + ")" : ""));
+            String origin = req.header("Origin", null);
+            if (origin != null) {
+                LOGGER.info("    origin = " + origin);
+            }
+            LOGGER.info("    origin ip = " + ipAddress + (hostname != null ? " (" + hostname + ")" : ""));
             LOGGER.info("    supports compression = " + supportsCompression);
             LOGGER.info("");
         });

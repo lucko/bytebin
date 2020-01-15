@@ -138,7 +138,11 @@ public final class PutHandler implements ReqHandler {
                 LOGGER.info("    key = " + path);
                 LOGGER.info("    new type = " + new String(newContentType.getBytes()));
                 LOGGER.info("    user agent = " + req.header("User-Agent", "null"));
-                LOGGER.info("    origin = " + ipAddress + (hostname != null ? " (" + hostname + ")" : ""));
+                String origin = req.header("Origin", null);
+                if (origin != null) {
+                    LOGGER.info("    origin = " + origin);
+                }
+                LOGGER.info("    origin ip = " + ipAddress + (hostname != null ? " (" + hostname + ")" : ""));
                 LOGGER.info("    old content size = " + String.format("%,d", oldContent.getContent().length / 1024) + " KB");
                 LOGGER.info("    new content size = " + String.format("%,d", newContent.get().length / 1024) + " KB");
                 LOGGER.info("");
