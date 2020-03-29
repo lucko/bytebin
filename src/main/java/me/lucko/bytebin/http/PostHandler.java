@@ -38,7 +38,6 @@ import org.rapidoid.http.ReqHandler;
 import org.rapidoid.http.Resp;
 import org.rapidoid.u.U;
 
-import java.net.InetAddress;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
@@ -119,7 +118,7 @@ public final class PostHandler implements ReqHandler {
             authKey = null;
         }
 
-        this.server.getLoggingExecutor().submit(() -> {
+        /*this.server.getLoggingExecutor().submit(() -> {
             String hostname = null;
             try {
                 InetAddress inetAddress = InetAddress.getByName(ipAddress);
@@ -129,24 +128,20 @@ public final class PostHandler implements ReqHandler {
                 }
             } catch (Exception e) {
                 // ignore
-            }
+            }*/
 
-            LOGGER.info("[POST]");
-            LOGGER.info("    key = " + key);
-            LOGGER.info("    type = " + contentType);
-            LOGGER.info("    user agent = " + req.header("User-Agent", "null"));
             String origin = req.header("Origin", null);
-            if (origin != null) {
-                LOGGER.info("    origin = " + origin);
-            }
-            LOGGER.info("    origin ip = " + ipAddress + (hostname != null ? " (" + hostname + ")" : ""));
-            LOGGER.info("    content size = " + String.format("%,d", content.get().length / 1024) + " KB");
-            LOGGER.info("    compressed = " + !requiresCompression.get());
-            if (allowModifications) {
-                LOGGER.info("    allow modification = true");
-            }
-            LOGGER.info("");
-        });
+            LOGGER.info("[POST]\n" +
+                    "    key = " + key + "\n" +
+                    "    type = " + contentType + "\n" +
+                    "    user agent = " + req.header("User-Agent", "null") + "\n" +
+                    //"    origin = " + ipAddress + (hostname != null ? " (" + hostname + ")" : "") + "\n" +
+                    "    ip = " + ipAddress + "\n" +
+                    (origin == null ? "" : "    origin = " + origin + "\n") +
+                    "    content size = " + String.format("%,d", content.get().length / 1024) + " KB" + (requiresCompression.get() ? "" : " (compressed)") + "\n");
+                    //"    compressed = " + !requiresCompression.get() + "\n" +
+                    //"    allow modification = " + allowModifications + "\n");
+        //});
 
         // record the content in the cache
         CompletableFuture<Content> future = new CompletableFuture<>();

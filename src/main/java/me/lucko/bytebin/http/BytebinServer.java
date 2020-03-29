@@ -25,7 +25,6 @@
 
 package me.lucko.bytebin.http;
 
-import com.google.common.util.concurrent.ThreadFactoryBuilder;
 import me.lucko.bytebin.content.Content;
 import me.lucko.bytebin.content.ContentCache;
 import me.lucko.bytebin.content.ContentStorageHandler;
@@ -37,18 +36,15 @@ import org.rapidoid.http.Req;
 import org.rapidoid.http.Resp;
 import org.rapidoid.setup.Setup;
 
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
-
 public class BytebinServer {
 
     /** Logger instance */
     private static final Logger LOGGER = LogManager.getLogger(BytebinServer.class);
 
     /** Executor service used for logging. */
-    private final ExecutorService loggingExecutor = Executors.newSingleThreadExecutor(
-            new ThreadFactoryBuilder().setNameFormat("bytebin-logging-%d").build()
-    );
+    //private final ExecutorService loggingExecutor = Executors.newSingleThreadExecutor(
+    //        new ThreadFactoryBuilder().setNameFormat("bytebin-logging-%d").build()
+    //);
 
     private final Setup server;
 
@@ -71,9 +67,9 @@ public class BytebinServer {
         this.server.put("/*").managed(false).cacheCapacity(0).serve(new PutHandler(this, putRateLimiter, contentStorageHandler, contentCache, maxContentLength, lifetimeMillis));
     }
 
-    public ExecutorService getLoggingExecutor() {
-        return this.loggingExecutor;
-    }
+    //public ExecutorService getLoggingExecutor() {
+    //    return this.loggingExecutor;
+    //}
 
     public void start() {
         this.server.activate();

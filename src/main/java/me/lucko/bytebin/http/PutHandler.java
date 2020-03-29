@@ -36,7 +36,6 @@ import org.apache.logging.log4j.Logger;
 import org.rapidoid.http.Req;
 import org.rapidoid.http.ReqHandler;
 
-import java.net.InetAddress;
 import java.util.concurrent.atomic.AtomicReference;
 
 import static me.lucko.bytebin.http.BytebinServer.*;
@@ -122,7 +121,7 @@ public final class PutHandler implements ReqHandler {
 
             long newExpiry = System.currentTimeMillis() + this.lifetimeMillis;
 
-            this.server.getLoggingExecutor().submit(() -> {
+            /*this.server.getLoggingExecutor().submit(() -> {
                 String hostname = null;
                 try {
                     InetAddress inetAddress = InetAddress.getByName(ipAddress);
@@ -132,21 +131,19 @@ public final class PutHandler implements ReqHandler {
                     }
                 } catch (Exception e) {
                     // ignore
-                }
+                }*/
 
-                LOGGER.info("[PUT]");
-                LOGGER.info("    key = " + path);
-                LOGGER.info("    new type = " + new String(newContentType.getBytes()));
-                LOGGER.info("    user agent = " + req.header("User-Agent", "null"));
                 String origin = req.header("Origin", null);
-                if (origin != null) {
-                    LOGGER.info("    origin = " + origin);
-                }
-                LOGGER.info("    origin ip = " + ipAddress + (hostname != null ? " (" + hostname + ")" : ""));
-                LOGGER.info("    old content size = " + String.format("%,d", oldContent.getContent().length / 1024) + " KB");
-                LOGGER.info("    new content size = " + String.format("%,d", newContent.get().length / 1024) + " KB");
-                LOGGER.info("");
-            });
+                LOGGER.info("[PUT]\n" +
+                        "    key = " + path + "\n" +
+                        "    new type = " + new String(newContentType.getBytes()) + "\n" +
+                        "    user agent = " + req.header("User-Agent", "null") + "\n" +
+                        //"    origin = " + ipAddress + (hostname != null ? " (" + hostname + ")" : "") + "\n" +
+                        "    ip = " + ipAddress + "\n" +
+                        (origin == null ? "" : "    origin = " + origin + "\n") +
+                        "    old content size = " + String.format("%,d", oldContent.getContent().length / 1024) + " KB" + "\n" +
+                        "    new content size = " + String.format("%,d", newContent.get().length / 1024) + " KB" + "\n");
+            //});
 
             // update the content instance with the new data
             oldContent.setContentType(newContentType);

@@ -37,7 +37,6 @@ import org.rapidoid.http.ReqHandler;
 import org.rapidoid.http.Resp;
 
 import java.io.IOException;
-import java.net.InetAddress;
 import java.time.Instant;
 import java.time.ZoneOffset;
 import java.time.format.DateTimeFormatter;
@@ -75,7 +74,7 @@ public final class GetHandler implements ReqHandler {
         // request the file from the cache async
         boolean supportsCompression = Compression.acceptsCompressed(req);
 
-        this.server.getLoggingExecutor().submit(() -> {
+        /*this.server.getLoggingExecutor().submit(() -> {
             String hostname = null;
             try {
                 InetAddress inetAddress = InetAddress.getByName(ipAddress);
@@ -85,19 +84,16 @@ public final class GetHandler implements ReqHandler {
                 }
             } catch (Exception e) {
                 // ignore
-            }
-
-            LOGGER.info("[REQUEST]");
-            LOGGER.info("    key = " + path);
-            LOGGER.info("    user agent = " + req.header("User-Agent", "null"));
+            }*/
             String origin = req.header("Origin", null);
-            if (origin != null) {
-                LOGGER.info("    origin = " + origin);
-            }
-            LOGGER.info("    origin ip = " + ipAddress + (hostname != null ? " (" + hostname + ")" : ""));
-            LOGGER.info("    supports compression = " + supportsCompression);
-            LOGGER.info("");
-        });
+            LOGGER.info("[REQUEST]\n" +
+                    "    key = " + path + "\n" +
+                    "    user agent = " + req.header("User-Agent", "null") + "\n" +
+                    //"    origin = " + ipAddress + (hostname != null ? " (" + hostname + ")" : "") + "\n" +
+                    "    ip = " + ipAddress + "\n" +
+                    (origin == null ? "" : "    origin = " + origin + "\n"));
+                    //"    supports compression = " + supportsCompression + "\n");
+        //});
 
         this.contentCache.get(path).whenCompleteAsync((content, throwable) -> {
             if (throwable != null || content == null || content.getKey() == null || content.getContent().length == 0) {
