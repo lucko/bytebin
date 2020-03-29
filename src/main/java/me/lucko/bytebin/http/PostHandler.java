@@ -38,7 +38,6 @@ import org.rapidoid.http.Resp;
 import org.rapidoid.u.U;
 
 import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.atomic.AtomicReference;
 
 import static me.lucko.bytebin.http.BytebinServer.*;
 
@@ -70,12 +69,12 @@ public final class PostHandler implements ReqHandler {
 
     @Override
     public Object execute(Req req) {
-        AtomicReference<byte[]> content = new AtomicReference<>(req.body());
+        byte[] content = req.body();
 
         String ipAddress = BytebinServer.getIpAddress(req);
 
         // ensure something was actually posted
-        if (content.get().length == 0) return cors(req.response()).code(400).plain("Missing content");
+        if (content.length == 0) return cors(req.response()).code(400).plain("Missing content");
         // check rate limits
         if (this.rateLimiter.check(ipAddress)) return cors(req.response()).code(429).plain("Rate limit exceeded");
 
@@ -91,7 +90,7 @@ public final class PostHandler implements ReqHandler {
         long expiry = System.currentTimeMillis() + this.lifetimeMillis;
 
         // check max content length
-        if (content.get().length > this.maxContentLength) return cors(req.response()).code(413).plain("Content too large");
+        if (content.length > this.maxContentLength) return cors(req.response()).code(413).plain("Content too large");
 
         // check for our custom Allow-Modification header
         boolean allowModifications = Boolean.parseBoolean(req.header("Allow-Modification", "false"));
@@ -122,7 +121,7 @@ public final class PostHandler implements ReqHandler {
                     //"    origin = " + ipAddress + (hostname != null ? " (" + hostname + ")" : "") + "\n" +
                     "    ip = " + ipAddress + "\n" +
                     (origin == null ? "" : "    origin = " + origin + "\n") +
-                    "    content size = " + String.format("%,d", content.get().length / 1024) + " KB" + (compressed ? " (compressed)" : "") + "\n");
+                    "    content size = " + String.format("%,d", content.length / 1024) + " KB" + (compressed ? " (compressed)" : "") + "\n");
                     //"    compressed = " + !requiresCompression.get() + "\n" +
                     //"    allow modification = " + allowModifications + "\n");
         //});
@@ -132,7 +131,7 @@ public final class PostHandler implements ReqHandler {
         this.contentCache.put(key, future);
 
         // save the data to the filesystem
-        this.contentStorageHandler.getExecutor().execute(() -> this.contentStorageHandler.save(key, contentType, content.get(), expiry, authKey, !compressed, future));
+        this.contentStorageHandler.getExecutor().execute(() -> this.contentStorageHandler.save(key, contentType, content, expiry, authKey, !compressed, future));
 
         // return the url location as plain content
         Resp resp = cors(req.response()).code(201).header("Location", key);
