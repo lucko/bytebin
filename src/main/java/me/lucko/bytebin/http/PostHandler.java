@@ -28,7 +28,6 @@ package me.lucko.bytebin.http;
 import me.lucko.bytebin.content.Content;
 import me.lucko.bytebin.content.ContentCache;
 import me.lucko.bytebin.content.ContentStorageHandler;
-import me.lucko.bytebin.util.Compression;
 import me.lucko.bytebin.util.RateLimiter;
 import me.lucko.bytebin.util.TokenGenerator;
 import org.apache.logging.log4j.LogManager;
@@ -39,7 +38,6 @@ import org.rapidoid.http.Resp;
 import org.rapidoid.u.U;
 
 import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
 
 import static me.lucko.bytebin.http.BytebinServer.*;
@@ -90,20 +88,6 @@ public final class PostHandler implements ReqHandler {
         // is the content already compressed?
         boolean compressed = req.header("Content-Encoding", "").equals("gzip");
 
-        // if compression is required at a later stage
-        AtomicBoolean requiresCompression = new AtomicBoolean(false);
-
-        // if it's not compressed, consider the effect of compression on the content length
-        if (!compressed) {
-            // if the max content length would be exceeded - try compressing
-            if (content.get().length > this.maxContentLength) {
-                content.set(Compression.compress(content.get()));
-            } else {
-                // compress later
-                requiresCompression.set(true);
-            }
-        }
-
         long expiry = System.currentTimeMillis() + this.lifetimeMillis;
 
         // check max content length
@@ -138,7 +122,7 @@ public final class PostHandler implements ReqHandler {
                     //"    origin = " + ipAddress + (hostname != null ? " (" + hostname + ")" : "") + "\n" +
                     "    ip = " + ipAddress + "\n" +
                     (origin == null ? "" : "    origin = " + origin + "\n") +
-                    "    content size = " + String.format("%,d", content.get().length / 1024) + " KB" + (requiresCompression.get() ? "" : " (compressed)") + "\n");
+                    "    content size = " + String.format("%,d", content.get().length / 1024) + " KB" + (compressed ? " (compressed)" : "") + "\n");
                     //"    compressed = " + !requiresCompression.get() + "\n" +
                     //"    allow modification = " + allowModifications + "\n");
         //});
@@ -148,7 +132,7 @@ public final class PostHandler implements ReqHandler {
         this.contentCache.put(key, future);
 
         // save the data to the filesystem
-        this.contentStorageHandler.getExecutor().execute(() -> this.contentStorageHandler.save(key, contentType, content.get(), expiry, authKey, requiresCompression.get(), future));
+        this.contentStorageHandler.getExecutor().execute(() -> this.contentStorageHandler.save(key, contentType, content.get(), expiry, authKey, !compressed, future));
 
         // return the url location as plain content
         Resp resp = cors(req.response()).code(201).header("Location", key);
