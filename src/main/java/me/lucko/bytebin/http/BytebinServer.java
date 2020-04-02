@@ -36,6 +36,8 @@ import org.rapidoid.http.Req;
 import org.rapidoid.http.Resp;
 import org.rapidoid.setup.Setup;
 
+import java.util.Map;
+
 public class BytebinServer {
 
     /** Logger instance */
@@ -48,7 +50,7 @@ public class BytebinServer {
 
     private final Setup server;
 
-    public BytebinServer(ContentStorageHandler contentStorageHandler, ContentCache contentCache, String host, int port, RateLimiter postRateLimiter, RateLimiter putRateLimiter, RateLimiter readRateLimiter, byte[] indexPage, TokenGenerator contentTokenGenerator, long maxContentLength, long lifetimeMillis) {
+    public BytebinServer(ContentStorageHandler contentStorageHandler, ContentCache contentCache, String host, int port, RateLimiter postRateLimiter, RateLimiter putRateLimiter, RateLimiter readRateLimiter, byte[] indexPage, TokenGenerator contentTokenGenerator, long maxContentLength, long lifetimeMillis, Map<String, Long> lifetimeMillisByUserAgent) {
         this.server = Setup.create("bytebin");
         this.server.address(host).port(port);
 
@@ -62,7 +64,7 @@ public class BytebinServer {
         defineOptionsRoute(this.server, "/post", "POST");
         defineOptionsRoute(this.server, "/*", "GET");
         this.server.page("/").html(indexPage);
-        this.server.post("/post").managed(false).serve(new PostHandler(this, postRateLimiter, contentStorageHandler, contentCache, contentTokenGenerator, maxContentLength, lifetimeMillis));
+        this.server.post("/post").managed(false).serve(new PostHandler(this, postRateLimiter, contentStorageHandler, contentCache, contentTokenGenerator, maxContentLength, lifetimeMillis, lifetimeMillisByUserAgent));
         this.server.get("/*").managed(false).cacheCapacity(0).serve(new GetHandler(this, readRateLimiter, contentCache));
         this.server.put("/*").managed(false).cacheCapacity(0).serve(new PutHandler(this, putRateLimiter, contentStorageHandler, contentCache, maxContentLength, lifetimeMillis));
     }

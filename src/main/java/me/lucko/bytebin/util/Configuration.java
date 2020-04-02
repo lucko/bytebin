@@ -25,6 +25,7 @@
 
 package me.lucko.bytebin.util;
 
+import com.google.common.collect.ImmutableMap;
 import com.google.gson.Gson;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
@@ -34,6 +35,7 @@ import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.Map;
 
 /**
  * Json config wrapper class
@@ -80,5 +82,18 @@ public class Configuration {
             return def;
         }
         return e.getAsLong();
+    }
+
+    public Map<String, Long> getLongMap(String path) {
+        JsonElement e = this.jsonObject.get(path);
+        if (e == null || !e.isJsonObject()) {
+            return ImmutableMap.of();
+        }
+
+        JsonObject map = e.getAsJsonObject();
+        return map.entrySet().stream().collect(ImmutableMap.toImmutableMap(
+                Map.Entry::getKey,
+                ent -> ent.getValue().getAsLong()
+        ));
     }
 }

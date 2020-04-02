@@ -50,7 +50,6 @@ public final class PutHandler implements ReqHandler {
 
     private final ContentStorageHandler contentStorageHandler;
     private final ContentCache contentCache;
-
     private final long maxContentLength;
     private final long lifetimeMillis;
 
@@ -59,7 +58,6 @@ public final class PutHandler implements ReqHandler {
         this.rateLimiter = rateLimiter;
         this.contentStorageHandler = contentStorageHandler;
         this.contentCache = contentCache;
-
         this.maxContentLength = maxContentLength;
         this.lifetimeMillis = lifetimeMillis;
     }

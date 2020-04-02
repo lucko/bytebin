@@ -25,6 +25,7 @@
 
 package me.lucko.bytebin;
 
+import com.google.common.collect.ImmutableMap;
 import com.google.common.io.CharStreams;
 import com.google.common.util.concurrent.ThreadFactoryBuilder;
 import me.lucko.bytebin.content.Content;
@@ -43,6 +44,7 @@ import java.io.IOException;
 import java.io.InputStreamReader;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Paths;
+import java.util.Map;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
@@ -128,7 +130,8 @@ public final class Bytebin implements AutoCloseable {
                 indexPage,
                 new TokenGenerator(config.getInt("keyLength", 7)),
                 (Content.MEGABYTE_LENGTH * config.getInt("maxContentLengthMb", 10)),
-                TimeUnit.MINUTES.toMillis(config.getLong("lifetimeMinutes", TimeUnit.DAYS.toMinutes(1)))
+                TimeUnit.MINUTES.toMillis(config.getLong("lifetimeMinutes", TimeUnit.DAYS.toMinutes(1))),
+                config.getLongMap("lifetimeMinutesByUserAgent").entrySet().stream().collect(ImmutableMap.toImmutableMap(Map.Entry::getKey, e -> TimeUnit.MINUTES.toMillis(e.getValue())))
         );
         this.server.start();
 

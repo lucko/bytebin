@@ -37,6 +37,7 @@ import org.rapidoid.http.ReqHandler;
 import org.rapidoid.http.Resp;
 import org.rapidoid.u.U;
 
+import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 
 import static me.lucko.bytebin.http.BytebinServer.*;
@@ -55,8 +56,9 @@ public final class PostHandler implements ReqHandler {
     private final TokenGenerator authKeyTokenGenerator;
     private final long maxContentLength;
     private final long lifetimeMillis;
+    private final Map<String, Long> lifetimeMillisByUserAgent;
 
-    public PostHandler(BytebinServer server, RateLimiter rateLimiter, ContentStorageHandler contentStorageHandler, ContentCache contentCache, TokenGenerator contentTokenGenerator, long maxContentLength, long lifetimeMillis) {
+    public PostHandler(BytebinServer server, RateLimiter rateLimiter, ContentStorageHandler contentStorageHandler, ContentCache contentCache, TokenGenerator contentTokenGenerator, long maxContentLength, long lifetimeMillis, Map<String, Long> lifetimeMillisByUserAgent) {
         this.server = server;
         this.rateLimiter = rateLimiter;
         this.contentStorageHandler = contentStorageHandler;
@@ -65,6 +67,7 @@ public final class PostHandler implements ReqHandler {
         this.authKeyTokenGenerator = new TokenGenerator(32);
         this.maxContentLength = maxContentLength;
         this.lifetimeMillis = lifetimeMillis;
+        this.lifetimeMillisByUserAgent = lifetimeMillisByUserAgent;
     }
 
     @Override
@@ -87,7 +90,11 @@ public final class PostHandler implements ReqHandler {
         // is the content already compressed?
         boolean compressed = req.header("Content-Encoding", "").equals("gzip");
 
-        long expiry = System.currentTimeMillis() + this.lifetimeMillis;
+        // get the user agent & origin headers
+        String userAgent = req.header("User-Agent", "null");
+        String origin = req.header("Origin", "null");
+
+        long expiry = System.currentTimeMillis() + this.lifetimeMillisByUserAgent.getOrDefault(userAgent, this.lifetimeMillisByUserAgent.getOrDefault(origin, this.lifetimeMillis));
 
         // check max content length
         if (content.length > this.maxContentLength) return cors(req.response()).code(413).plain("Content too large");
@@ -113,14 +120,13 @@ public final class PostHandler implements ReqHandler {
                 // ignore
             }*/
 
-            String origin = req.header("Origin", null);
             LOGGER.info("[POST]\n" +
                     "    key = " + key + "\n" +
                     "    type = " + contentType + "\n" +
-                    "    user agent = " + req.header("User-Agent", "null") + "\n" +
+                    "    user agent = " + userAgent + "\n" +
                     //"    origin = " + ipAddress + (hostname != null ? " (" + hostname + ")" : "") + "\n" +
                     "    ip = " + ipAddress + "\n" +
-                    (origin == null ? "" : "    origin = " + origin + "\n") +
+                    (origin.equals("null") ? "" : "    origin = " + origin + "\n") +
                     "    content size = " + String.format("%,d", content.length / 1024) + " KB" + (compressed ? " (compressed)" : "") + "\n");
                     //"    compressed = " + !requiresCompression.get() + "\n" +
                     //"    allow modification = " + allowModifications + "\n");
