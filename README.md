@@ -5,12 +5,14 @@ it's a "pastebin" in a very simplified sense. effectively, it:
 
 * accepts (optionally compressed) post requests containing raw content
 * saves the content to disk and caches it in memory
-* returns a token to indicate the location of the content
-* serves content (in a compressed form if the client can handle it) when requested (using the token)
+* returns a key to indicate the location of the content
+* serves content (in a compressed form if the client can handle it) when requested
 
-there's no fancy frontend - it can only be used via other software. (although you can at least view content in a web browser, assuming it's a media type that can be displayed)
+there's a very minimal HTML frontend for posting content.
 
 the primary intended purpose of bytebin is to act as a middle man in the communication of two separate clients, using payload objects (uploaded to a bytebin instance) as a means to transmit data.
+
+it's also quite good for transferring or sharing large log/plain text files because they're particularly compressible with gzip.
 
 ## api usage
 

@@ -30,6 +30,7 @@ import me.lucko.bytebin.content.ContentCache;
 import me.lucko.bytebin.content.ContentStorageHandler;
 import me.lucko.bytebin.util.RateLimiter;
 import me.lucko.bytebin.util.TokenGenerator;
+
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.rapidoid.http.Req;
@@ -61,8 +62,8 @@ public class BytebinServer {
         });
 
         // define route handlers
-        defineOptionsRoute(this.server, "/post", "POST");
-        defineOptionsRoute(this.server, "/*", "GET");
+        defineOptionsRoute(this.server, "/post", "POST", "Content-Type, Content-Encoding, Allow-Modification");
+        defineOptionsRoute(this.server, "/*", "GET, PUT", "Content-Type, Content-Encoding, Modification-Key");
         this.server.page("/").html(indexPage);
         this.server.post("/post").managed(false).serve(new PostHandler(this, postRateLimiter, contentStorageHandler, contentCache, contentTokenGenerator, maxContentLength, lifetimeMillis, lifetimeMillisByUserAgent));
         this.server.get("/*").managed(false).cacheCapacity(0).serve(new GetHandler(this, readRateLimiter, contentCache));
@@ -81,11 +82,11 @@ public class BytebinServer {
         this.server.halt();
     }
 
-    private static void defineOptionsRoute(Setup setup, String path, String allowedMethod) {
+    private static void defineOptionsRoute(Setup setup, String path, String allowedMethod, String allowedHeaders) {
         setup.options(path).serve(req -> cors(req.response())
                 .header("Access-Control-Allow-Methods", allowedMethod)
                 .header("Access-Control-Max-Age", "86400")
-                .header("Access-Control-Allow-Headers", "Content-Type")
+                .header("Access-Control-Allow-Headers", allowedHeaders)
                 .code(200)
                 .body(Content.EMPTY_BYTES)
         );
