@@ -54,9 +54,9 @@ and plain old java for everything else.
 
 well it's written in java, but.. [rapidoid is pretty fast](https://www.techempower.com/benchmarks/#section=data-r15&hw=ph&test=plaintext&a=2), and [so is caffeine](https://github.com/ben-manes/caffeine/wiki/Benchmarks).
 
-## Setting up bytebin using DOcker
+## Setting up bytebin using Docker
 
-Setting up bytebin using docker is really simple, first we build the container and tag it as ``bytebin:latest`` using this command:
+Setting up bytebin using docker is really simple, after you cloned the repository you just need to build the container and tag it as ``bytebin:latest`` using this command:
 ```
 docker build . -t bytebin:latest
 ```
