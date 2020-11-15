@@ -54,5 +54,23 @@ and plain old java for everything else.
 
 well it's written in java, but.. [rapidoid is pretty fast](https://www.techempower.com/benchmarks/#section=data-r15&hw=ph&test=plaintext&a=2), and [so is caffeine](https://github.com/ben-manes/caffeine/wiki/Benchmarks).
 
+## Setting up bytebin using DOcker
+
+Setting up bytebin using docker is really simple, first we build the container and tag it as ``bytebin:latest`` using this command:
+```
+docker build . -t bytebin:latest
+```
+After the container finished building you can easily start it using the following command, which will expose bytebin on port ``7665``.
+```
+docker run -d -p 7665:7665 -e BYTEBIN_KEYLEN=10 -e BYTEBIN_LIFETIME=10080 -e BYTEBIN_CONTENTLEN=10 bytebin:latest
+```
+Now just setup a reverse proxy as descibed here: https://luckperms.net/wiki/Self-hosting-the-web-interfaces#step-1-installing-bytebin
+
+**__Enviroment Variables:__**
+```
+BYTEBIN_KEYLEN (number) - Length of the unique identification key
+BYTEBIN_LIFETIME (number) - Lifetime of a bytebin entry in seconds
+BYTEBIN_CONTENTLEN (number) - Maximum post size in megabytes
+```
 ## license
 MIT, go wild.
