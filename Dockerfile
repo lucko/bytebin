@@ -1,5 +1,7 @@
 # Start build with Alpine image
 FROM alpine:3.12
+# Set maintainer
+LABEL maintainer="LuckPerms <luck@lucko.me>"
 # Install dependencies and prepare enviroment
 RUN apk add --no-cache maven openjdk11 bash &&\
     addgroup -S bytebin &&\
