@@ -106,9 +106,9 @@ public final class PutHandler implements ReqHandler {
             String newContentType = req.header("Content-Type", oldContent.getContentType());
 
             // compress if necessary
-            boolean compressed = req.header("Content-Encoding", "").equals("gzip");
-            if (!compressed) {
-                newContent.set(Compression.compress(newContent.get()));
+            Compression.CompressionType compressionType = Compression.CompressionType.getCompression(req.header("Content-Encoding", ""));
+            if (compressionType != null) {
+                newContent.set(Compression.compress(newContent.get(), compressionType));
             }
 
             // check max content length

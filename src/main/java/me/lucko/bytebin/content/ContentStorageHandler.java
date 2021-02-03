@@ -113,11 +113,14 @@ public class ContentStorageHandler implements CacheLoader<String, Content> {
                 authKey = in.readUTF();
             }
 
+            // read compression type
+            Compression.CompressionType compressionType = version == 1 ? Compression.CompressionType.GZIP : (in.readBoolean() ? Compression.CompressionType.values()[in.readShort()] : null);
+
             // read content
             byte[] content = new byte[in.readInt()];
             in.readFully(content);
 
-            return new Content(key, contentType, expiry, lastModified, modifiable, authKey, content);
+            return new Content(key, contentType, expiry, lastModified, modifiable, authKey, content, compressionType);
         }
     }
 
@@ -151,18 +154,21 @@ public class ContentStorageHandler implements CacheLoader<String, Content> {
                 authKey = in.readUTF();
             }
 
-            return new Content(key, contentType, expiry, lastModified, modifiable, authKey, Content.EMPTY_BYTES);
+            // read compression type
+            Compression.CompressionType compressionType = version == 1 ? Compression.CompressionType.GZIP : (in.readBoolean() ? Compression.CompressionType.values()[in.readShort()] : null);
+
+            return new Content(key, contentType, expiry, lastModified, modifiable, authKey, Content.EMPTY_BYTES, compressionType);
         }
     }
 
-    public void save(String key, String contentType, byte[] content, long expiry, String authKey, boolean requiresCompression, CompletableFuture<Content> future) {
-        if (requiresCompression) {
-            content = Compression.compress(content);
+    public void save(String key, String contentType, byte[] content, long expiry, String authKey, Compression.CompressionType compressionType, CompletableFuture<Content> future) {
+        if (compressionType != null) {
+            content = Compression.compress(content, compressionType);
         }
 
         // add directly to the cache
         // it's quite likely that the file will be requested only a few seconds after it is uploaded
-        Content c = new Content(key, contentType, expiry, System.currentTimeMillis(), authKey != null, authKey, content);
+        Content c = new Content(key, contentType, expiry, System.currentTimeMillis(), authKey != null, authKey, content, compressionType);
         future.complete(c);
 
         save(c);
@@ -174,7 +180,7 @@ public class ContentStorageHandler implements CacheLoader<String, Content> {
 
         try (DataOutputStream out = new DataOutputStream(new BufferedOutputStream(Files.newOutputStream(path)))) {
             // write version
-            out.writeInt(1);
+            out.writeInt(2);
 
             // write name
             out.writeUTF(c.getKey());
@@ -194,6 +200,12 @@ public class ContentStorageHandler implements CacheLoader<String, Content> {
             out.writeBoolean(c.isModifiable());
             if (c.isModifiable()) {
                 out.writeUTF(c.getAuthKey());
+            }
+
+            // write compression type
+            out.writeBoolean(c.getCompressionType() != null);
+            if (c.getCompressionType() != null) {
+                out.writeShort(c.getCompressionType().ordinal());
             }
 
             // write content

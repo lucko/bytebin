@@ -25,6 +25,8 @@
 
 package me.lucko.bytebin.content;
 
+import me.lucko.bytebin.util.Compression;
+
 /**
  * Encapsulates content within the service
  */
@@ -34,7 +36,7 @@ public final class Content {
     public static final byte[] EMPTY_BYTES = new byte[0];
 
     /** Empty content instance */
-    public static final Content EMPTY_CONTENT = new Content(null, "text/plain", Long.MAX_VALUE, Long.MIN_VALUE, false, null, EMPTY_BYTES);
+    public static final Content EMPTY_CONTENT = new Content(null, "text/plain", Long.MAX_VALUE, Long.MIN_VALUE, false, null, EMPTY_BYTES, null);
 
     /** Number of bytes in a megabyte */
     public static final long MEGABYTE_LENGTH = 1024L * 1024L;
@@ -46,8 +48,9 @@ public final class Content {
     private final boolean modifiable;
     private final String authKey;
     private byte[] content;
+    private Compression.CompressionType compressionType;
 
-    public Content(String key, String contentType, long expiry, long lastModified, boolean modifiable, String authKey, byte[] content) {
+    public Content(String key, String contentType, long expiry, long lastModified, boolean modifiable, String authKey, byte[] content, Compression.CompressionType compressionType) {
         this.key = key;
         this.contentType = contentType;
         this.expiry = expiry;
@@ -55,6 +58,7 @@ public final class Content {
         this.modifiable = modifiable;
         this.authKey = authKey;
         this.content = content;
+        this.compressionType = compressionType;
     }
 
     public String getKey() {
@@ -99,6 +103,14 @@ public final class Content {
 
     public void setContent(byte[] content) {
         this.content = content;
+    }
+
+    public Compression.CompressionType getCompressionType() {
+        return compressionType;
+    }
+
+    public void setCompressionType(Compression.CompressionType compressionType) {
+        this.compressionType = compressionType;
     }
 
     public boolean shouldExpire() {

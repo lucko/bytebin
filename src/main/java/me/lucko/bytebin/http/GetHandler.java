@@ -72,7 +72,7 @@ public final class GetHandler implements ReqHandler {
         if (this.rateLimiter.check(ipAddress)) return cors(req.response()).code(429).plain("Rate limit exceeded");
 
         // request the file from the cache async
-        boolean supportsCompression = Compression.acceptsCompressed(req);
+        Compression.CompressionType compressionType = Compression.compressionType(req);
 
         /*this.server.getLoggingExecutor().submit(() -> {
             String hostname = null;
@@ -92,7 +92,7 @@ public final class GetHandler implements ReqHandler {
                     //"    origin = " + ipAddress + (hostname != null ? " (" + hostname + ")" : "") + "\n" +
                     "    ip = " + ipAddress + "\n" +
                     (origin == null ? "" : "    origin = " + origin + "\n"));
-                    //"    supports compression = " + supportsCompression + "\n");
+                    //"    compression = " + compressionType + "\n");
         //});
 
         this.contentCache.get(path).whenCompleteAsync((content, throwable) -> {
@@ -111,9 +111,12 @@ public final class GetHandler implements ReqHandler {
                 resp.header("Cache-Control", "public, max-age=86400");
             }
 
+            // SHORT CIRCUIT LOGIC
             // will the client accept the content in a compressed form?
-            if (supportsCompression) {
-                resp.header("Content-Encoding", "gzip")
+            // AND
+            // is the content stored in that compressed form?
+            if (compressionType != null && compressionType.equals(content.getCompressionType())) {
+                resp.header("Content-Encoding", compressionType.getName())
                         .body(content.getContent())
                         .contentType(MediaType.of(content.getContentType()))
                         .done();
@@ -123,9 +126,18 @@ public final class GetHandler implements ReqHandler {
             // need to uncompress
             byte[] uncompressed;
             try {
-                uncompressed = Compression.decompress(content.getContent());
+                uncompressed = Compression.decompress(content.getContent(), content.getCompressionType());
             } catch (IOException e) {
                 cors(req.response()).code(404).plain("Unable to uncompress data").done();
+                return;
+            }
+
+            // will the client accept the content in a compressed form?
+            if (compressionType != null) {
+                resp.header("Content-Encoding", compressionType.getName())
+                        .body(Compression.compress(uncompressed, compressionType))
+                        .contentType(MediaType.of(content.getContentType()))
+                        .done();
                 return;
             }
 

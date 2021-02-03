@@ -28,6 +28,7 @@ package me.lucko.bytebin.http;
 import me.lucko.bytebin.content.Content;
 import me.lucko.bytebin.content.ContentCache;
 import me.lucko.bytebin.content.ContentStorageHandler;
+import me.lucko.bytebin.util.Compression;
 import me.lucko.bytebin.util.RateLimiter;
 import me.lucko.bytebin.util.TokenGenerator;
 import org.apache.logging.log4j.LogManager;
@@ -88,7 +89,7 @@ public final class PostHandler implements ReqHandler {
         String key = this.contentTokenGenerator.generate();
 
         // is the content already compressed?
-        boolean compressed = req.header("Content-Encoding", "").equals("gzip");
+        Compression.CompressionType compressionType = Compression.CompressionType.getCompression(req.header("Content-Encoding", ""));
 
         // get the user agent & origin headers
         String userAgent = req.header("User-Agent", "null");
@@ -127,7 +128,7 @@ public final class PostHandler implements ReqHandler {
                     //"    origin = " + ipAddress + (hostname != null ? " (" + hostname + ")" : "") + "\n" +
                     "    ip = " + ipAddress + "\n" +
                     (origin.equals("null") ? "" : "    origin = " + origin + "\n") +
-                    "    content size = " + String.format("%,d", content.length / 1024) + " KB" + (compressed ? " (compressed)" : "") + "\n");
+                    "    content size = " + String.format("%,d", content.length / 1024) + " KB" + (compressionType != null ? " (compressed - " + contentType + ")" : "") + "\n");
                     //"    compressed = " + !requiresCompression.get() + "\n" +
                     //"    allow modification = " + allowModifications + "\n");
         //});
@@ -137,7 +138,7 @@ public final class PostHandler implements ReqHandler {
         this.contentCache.put(key, future);
 
         // save the data to the filesystem
-        this.contentStorageHandler.getExecutor().execute(() -> this.contentStorageHandler.save(key, contentType, content, expiry, authKey, !compressed, future));
+        this.contentStorageHandler.getExecutor().execute(() -> this.contentStorageHandler.save(key, contentType, content, expiry, authKey, compressionType, future));
 
         // return the url location as plain content
         Resp resp = cors(req.response()).code(201).header("Location", key);

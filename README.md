@@ -12,7 +12,7 @@ there's a very minimal HTML frontend for posting content.
 
 the primary intended purpose of bytebin is to act as a middle man in the communication of two separate clients, using payload objects (uploaded to a bytebin instance) as a means to transmit data.
 
-it's also quite good for transferring or sharing large log/plain text files because they're particularly compressible with gzip.
+it's also quite good for transferring or sharing large log/plain text files because they're particularly compressible with gzip/zstd.
 
 ## api usage
 
@@ -25,7 +25,7 @@ The API fully supports CORS. wooo :tada:
 * send a POST request to `/post`.
 * the request body should contain the content to be uploaded.
 * it is recommended to provide `Content-Type` and `User-Agent` headers, but this is not required.
-* ideally, content should be compressed with GZIP before being uploaded. Include the `Content-Encoding: gzip` header if this is the case.
+* ideally, content should be compressed with GZIP or Zstd before being uploaded. Include the `Content-Encoding: gzip` or `Content-Encoding: zstd` header if this is the case.
 * the key is specified in the returned `Location` header.
 * the response body is a JSON object with only one property, `{"key": "{key}"}`.
 

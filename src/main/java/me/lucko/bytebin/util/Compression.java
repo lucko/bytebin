@@ -26,41 +26,93 @@
 package me.lucko.bytebin.util;
 
 import com.google.common.base.Splitter;
-import com.google.common.collect.Iterables;
-import com.google.common.io.ByteStreams;
+import me.lucko.bytebin.util.compression.GZIPCompressionStream;
+import me.lucko.bytebin.util.compression.ZSTDCompressionStream;
 import org.rapidoid.http.Req;
 
-import java.io.ByteArrayInputStream;
-import java.io.ByteArrayOutputStream;
 import java.io.IOException;
-import java.util.zip.GZIPInputStream;
-import java.util.zip.GZIPOutputStream;
 
 public final class Compression {
     private Compression() {}
 
     private static final Splitter COMMA_SPLITTER = Splitter.on(", ");
 
-    public static boolean acceptsCompressed(Req req) {
+    public static CompressionType compressionType(Req req) {
         String header = req.header("Accept-Encoding", null);
-        return header != null && Iterables.contains(COMMA_SPLITTER.split(header), "gzip");
+        if (header != null) {
+            for (String typeStr : COMMA_SPLITTER.split(header)) {
+                CompressionType type = CompressionType.getCompression(typeStr);
+                if (type != null) {
+                    return type;
+                }
+            }
+        }
+        return null;
     }
 
-    public static byte[] compress(byte[] buf) {
-        ByteArrayOutputStream out = new ByteArrayOutputStream(buf.length);
-        try (GZIPOutputStream gzipOut = new GZIPOutputStream(out)) {
-            gzipOut.write(buf);
+    private static final GZIPCompressionStream GZIP_STREAM = new GZIPCompressionStream();
+    private static final ZSTDCompressionStream ZSTD_STREAM = new ZSTDCompressionStream();
+
+    public static byte[] compress(byte[] buf, CompressionType type) {
+        if (type == null) {
+            return buf;
+        }
+
+        try {
+            switch (type) {
+                case GZIP:
+                    return GZIP_STREAM.compress(buf);
+                case ZSTD:
+                    return ZSTD_STREAM.compress(buf);
+                default:
+                    throw new RuntimeException("Unknown compression type: " + type);
+            }
         } catch (IOException e) {
             throw new RuntimeException(e);
         }
-        return out.toByteArray();
     }
 
-    public static byte[] decompress(byte[] buf) throws IOException {
-        ByteArrayInputStream in = new ByteArrayInputStream(buf);
-        try (GZIPInputStream gzipIn = new GZIPInputStream(in)) {
-            return ByteStreams.toByteArray(gzipIn);
+    public static byte[] decompress(byte[] buf, CompressionType type) throws IOException {
+        if (type == null) {
+            return buf;
         }
+
+        switch (type) {
+            case GZIP:
+                return GZIP_STREAM.decompress(buf);
+            case ZSTD:
+                return ZSTD_STREAM.decompress(buf);
+            default:
+                throw new IOException("Unknown compression type: " + type);
+        }
+    }
+
+    public enum CompressionType {
+        GZIP("gzip"),
+        ZSTD("zstd");
+
+        private final String name;
+        CompressionType(String name) {
+            this.name = name;
+        }
+
+        public String getName() {
+            return name;
+        }
+
+        public static CompressionType getCompression(String name) {
+            if (name == null || name.isEmpty()) {
+                return null;
+            }
+
+            for (CompressionType type : values()) {
+                if (name.equalsIgnoreCase(type.name)) {
+                    return type;
+                }
+            }
+            return null;
+        }
+
     }
 
 }
