@@ -26,6 +26,7 @@
 package me.lucko.bytebin.util;
 
 import com.google.common.base.Splitter;
+import me.lucko.bytebin.util.compression.BrotliCompressionStream;
 import me.lucko.bytebin.util.compression.GZIPCompressionStream;
 import me.lucko.bytebin.util.compression.ZSTDCompressionStream;
 import org.rapidoid.http.Req;
@@ -51,6 +52,7 @@ public final class Compression {
     }
 
     private static final GZIPCompressionStream GZIP_STREAM = new GZIPCompressionStream();
+    private static final BrotliCompressionStream BROTLI_STREAM = new BrotliCompressionStream();
     private static final ZSTDCompressionStream ZSTD_STREAM = new ZSTDCompressionStream();
 
     public static byte[] compress(byte[] buf, CompressionType type) {
@@ -62,6 +64,8 @@ public final class Compression {
             switch (type) {
                 case GZIP:
                     return GZIP_STREAM.compress(buf);
+                case BROTLI:
+                    return BROTLI_STREAM.compress(buf);
                 case ZSTD:
                     return ZSTD_STREAM.compress(buf);
                 default:
@@ -80,6 +84,8 @@ public final class Compression {
         switch (type) {
             case GZIP:
                 return GZIP_STREAM.decompress(buf);
+            case BROTLI:
+                return BROTLI_STREAM.decompress(buf);
             case ZSTD:
                 return ZSTD_STREAM.decompress(buf);
             default:
@@ -89,6 +95,7 @@ public final class Compression {
 
     public enum CompressionType {
         GZIP("gzip"),
+        BROTLI("br"),
         ZSTD("zstd");
 
         private final String name;

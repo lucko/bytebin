@@ -28,6 +28,7 @@ package me.lucko.bytebin;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.io.CharStreams;
 import com.google.common.util.concurrent.ThreadFactoryBuilder;
+import com.nixxcode.jvmbrotli.common.BrotliLoader;
 import me.lucko.bytebin.content.Content;
 import me.lucko.bytebin.content.ContentCache;
 import me.lucko.bytebin.content.ContentStorageHandler;
@@ -62,6 +63,12 @@ public final class Bytebin implements AutoCloseable {
         // setup logging
         System.setOut(IoBuilder.forLogger(LOGGER).setLevel(Level.INFO).buildPrintStream());
         System.setErr(IoBuilder.forLogger(LOGGER).setLevel(Level.ERROR).buildPrintStream());
+
+        // setup Brotli
+        if (!BrotliLoader.isBrotliAvailable()) {
+            LOGGER.error("Brotli is unavailable.");
+            return;
+        }
 
         // setup a new bytebin instance
         Configuration config = Configuration.load(Paths.get("config.json"));
