@@ -26,6 +26,7 @@
 package me.lucko.bytebin.util;
 
 import com.google.common.base.Splitter;
+import java.util.regex.Pattern;
 import me.lucko.bytebin.util.compression.BrotliCompressionStream;
 import me.lucko.bytebin.util.compression.GZIPCompressionStream;
 import me.lucko.bytebin.util.compression.ZSTDCompressionStream;
@@ -36,13 +37,14 @@ import java.io.IOException;
 public final class Compression {
     private Compression() {}
 
-    private static final Splitter COMMA_SPLITTER = Splitter.on(", ");
+    private static final Splitter COMMA_SPLITTER = Splitter.on(Pattern.compile(",\\s*"));
+    private static final Pattern RE_SEMICOLON = Pattern.compile(";\\s*");
 
     public static CompressionType compressionType(Req req) {
         String header = req.header("Accept-Encoding", null);
         if (header != null) {
             for (String typeStr : COMMA_SPLITTER.split(header)) {
-                CompressionType type = CompressionType.getCompression(typeStr);
+                CompressionType type = CompressionType.getCompression(RE_SEMICOLON.split(typeStr)[0]);
                 if (type != null) {
                     return type;
                 }
