@@ -108,7 +108,7 @@ public final class GetHandler implements ReqHandler {
             if (content.isModifiable()) {
                 resp.header("Cache-Control", "no-cache");
             } else {
-                resp.header("Cache-Control", "public, max-age=86400");
+                resp.header("Cache-Control", "public, max-age=" + (content.getExpiry() / 1000L));
             }
 
             // will the client accept the content in a compressed form?
