@@ -105,10 +105,11 @@ public final class GetHandler implements ReqHandler {
 
             Resp resp = cors(req.response()).code(200).header("Last-Modified", lastModifiedTime);
 
-            if (content.isModifiable()) {
+            long expires = content.getExpiry() - System.currentTimeMillis();
+            if (content.isModifiable() || expires <= 0L) {
                 resp.header("Cache-Control", "no-cache");
             } else {
-                resp.header("Cache-Control", "public, max-age=" + (content.getExpiry() / 1000L));
+                resp.header("Cache-Control", "public, max-age=" + (expires / 1000L));
             }
 
             // will the client accept the content in a compressed form?
