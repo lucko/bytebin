@@ -94,7 +94,7 @@ public final class GetHandler implements ReqHandler {
                     //"    origin = " + ipAddress + (hostname != null ? " (" + hostname + ")" : "") + "\n" +
                     "    ip = " + ipAddress + "\n" +
                     (origin == null ? "" : "    origin = " + origin + "\n"));
-                    //"    supports compression = " + (supportedEncodings.size() == 2 && ("gzip".equals(supportedEncodings.get(0)) || "x-gzip".equals(supportedEncodings.get(0)))) + "\n");
+                    //"    supports compression = " + (supportedEncodings.size() == 2 && ContentEncoding.GZIP.getEncoding().equals(supportedEncodings.get(0))) + "\n");
         //});
 
         this.contentCache.get(path).whenCompleteAsync((content, throwable) -> {
@@ -130,9 +130,9 @@ public final class GetHandler implements ReqHandler {
                     cors(req.response()).code(406).plain("Accept-Encoding \"" + req.header("Accept-Encoding", "") + "\" does not contain Content-Encoding \"" + content.getEncoding() + "\"").done();
                 }
                 return;
-            } else if ((encodings.size() == 2 && encodings.get(0) == ContentEncoding.GZIP) && (supportedEncodings.contains("*") || (supportedEncodings.size() == 2 && ("gzip".equals(supportedEncodings.get(0)) || "x-gzip".equals(supportedEncodings.get(0)))))) {
+            } else if ((encodings.size() == 2 && encodings.get(0) == ContentEncoding.GZIP) && (supportedEncodings.contains("*") || (supportedEncodings.size() == 2 && ContentEncoding.GZIP.getEncoding().equals(supportedEncodings.get(0))))) {
                 // the client will accept gzip
-                resp.header("Content-Encoding", "gzip")
+                resp.header("Content-Encoding", ContentEncoding.GZIP.getEncoding())
                         .body(content.getContent())
                         .contentType(MediaType.of(content.getContentType()))
                         .done();

@@ -49,7 +49,8 @@ public final class Compression {
         String header = req.header("Accept-Encoding", null);
         if (header != null) {
             for (String typeStr : COMMA_SPLITTER.split(header)) {
-                retVal.add(RE_SEMICOLON.split(typeStr)[0]);
+                typeStr = RE_SEMICOLON.split(typeStr)[0];
+                retVal.add("x-gzip".equals(typeStr) ? ContentEncoding.GZIP.getEncoding() : typeStr);
             }
         }
         if (!retVal.contains("identity") && !retVal.contains("*")) {
@@ -62,7 +63,7 @@ public final class Compression {
         List<String> retVal = new ArrayList<>(2);
         if (header != null && !header.isEmpty()) {
             for (String typeStr : COMMA_SPLITTER.split(header)) {
-                retVal.add(typeStr);
+                retVal.add("x-gzip".equals(typeStr) ? ContentEncoding.GZIP.getEncoding() : typeStr);
             }
         }
         if (!retVal.contains("identity")) {

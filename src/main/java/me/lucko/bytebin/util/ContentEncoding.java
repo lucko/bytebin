@@ -23,7 +23,7 @@ public enum ContentEncoding {
             return IDENTITY;
         }
         for (ContentEncoding type : values()) {
-            if (encoding.equals(type.encoding) || (encoding.equals("x-gzip") && type == GZIP)) {
+            if (encoding.equals(type.encoding)) {
                 return type;
             }
         }
@@ -36,7 +36,7 @@ public enum ContentEncoding {
             for (String typeStr : encoding) {
                 boolean added = false;
                 for (ContentEncoding type : values()) {
-                    if (typeStr.equals(type.encoding) || (typeStr.equals("x-gzip") && type == GZIP)) {
+                    if (typeStr.equals(type.encoding)) {
                         retVal.add(type);
                         added = true;
                         break;
