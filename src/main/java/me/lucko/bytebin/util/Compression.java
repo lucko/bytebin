@@ -53,8 +53,8 @@ public final class Compression {
                 retVal.add("x-gzip".equals(typeStr) ? ContentEncoding.GZIP.getEncoding() : typeStr);
             }
         }
-        if (!retVal.contains("identity") && !retVal.contains("*")) {
-            retVal.add("identity");
+        if (!retVal.contains("*") && !retVal.contains(ContentEncoding.IDENTITY.getEncoding())) {
+            retVal.add(ContentEncoding.IDENTITY.getEncoding());
         }
         return retVal;
     }
@@ -66,8 +66,8 @@ public final class Compression {
                 retVal.add("x-gzip".equals(typeStr) ? ContentEncoding.GZIP.getEncoding() : typeStr);
             }
         }
-        if (!retVal.contains("identity")) {
-            retVal.add("identity");
+        if (!retVal.contains(ContentEncoding.IDENTITY.getEncoding())) {
+            retVal.add(ContentEncoding.IDENTITY.getEncoding());
         }
         return retVal;
     }
