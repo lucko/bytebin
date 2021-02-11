@@ -25,7 +25,7 @@ The API fully supports CORS. wooo :tada:
 * send a POST request to `/post`.
 * the request body should contain the content to be uploaded.
 * it is recommended to provide `Content-Type` and `User-Agent` headers, but this is not required.
-* ideally, content should be compressed with GZIP before being uploaded. Include the `Content-Encoding: gzip` header if this is the case.
+* ideally, content should be compressed with GZIP or another mechanism before being uploaded. Include the `Content-Encoding: <type>` header if this is the case.
 * the key is specified in the returned `Location` header.
 * the response body is a JSON object with only one property, `{"key": "{key}"}`.
 

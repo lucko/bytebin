@@ -25,9 +25,13 @@
 
 package me.lucko.bytebin.http;
 
+import java.util.List;
+import java.util.regex.Pattern;
 import me.lucko.bytebin.content.Content;
 import me.lucko.bytebin.content.ContentCache;
 import me.lucko.bytebin.content.ContentStorageHandler;
+import me.lucko.bytebin.util.Compression;
+import me.lucko.bytebin.util.ContentEncoding;
 import me.lucko.bytebin.util.RateLimiter;
 import me.lucko.bytebin.util.TokenGenerator;
 import org.apache.logging.log4j.LogManager;
@@ -58,6 +62,8 @@ public final class PostHandler implements ReqHandler {
     private final long lifetimeMillis;
     private final Map<String, Long> lifetimeMillisByUserAgent;
 
+    private static final Pattern RE_SPACE = Pattern.compile("\\s+");
+
     public PostHandler(BytebinServer server, RateLimiter rateLimiter, ContentStorageHandler contentStorageHandler, ContentCache contentCache, TokenGenerator contentTokenGenerator, long maxContentLength, long lifetimeMillis, Map<String, Long> lifetimeMillisByUserAgent) {
         this.server = server;
         this.rateLimiter = rateLimiter;
@@ -87,8 +93,9 @@ public final class PostHandler implements ReqHandler {
         // generate a key
         String key = this.contentTokenGenerator.generate();
 
-        // is the content already compressed?
-        boolean compressed = req.header("Content-Encoding", "").equals("gzip");
+        // get the content encodings
+        // https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/Content-Encoding
+        List<ContentEncoding> encodings = ContentEncoding.getEncoding(Compression.getProvidedEncoding(req.header("Content-Encoding", "")));
 
         // get the user agent & origin headers
         String userAgent = req.header("User-Agent", "null");
@@ -127,7 +134,7 @@ public final class PostHandler implements ReqHandler {
                     //"    origin = " + ipAddress + (hostname != null ? " (" + hostname + ")" : "") + "\n" +
                     "    ip = " + ipAddress + "\n" +
                     (origin.equals("null") ? "" : "    origin = " + origin + "\n") +
-                    "    content size = " + String.format("%,d", content.length / 1024) + " KB" + (compressed ? " (compressed)" : "") + "\n");
+                    "    content size = " + String.format("%,d", content.length / 1024) + " KB" + (encodings.size() == 2 && encodings.get(0) == ContentEncoding.GZIP ? " (compressed)" : "") + "\n");
                     //"    compressed = " + !requiresCompression.get() + "\n" +
                     //"    allow modification = " + allowModifications + "\n");
         //});
@@ -137,7 +144,7 @@ public final class PostHandler implements ReqHandler {
         this.contentCache.put(key, future);
 
         // save the data to the filesystem
-        this.contentStorageHandler.getExecutor().execute(() -> this.contentStorageHandler.save(key, contentType, content, expiry, authKey, !compressed, future));
+        this.contentStorageHandler.getExecutor().execute(() -> this.contentStorageHandler.save(key, contentType, content, expiry, authKey, encodings.size() == 1 && encodings.get(0) == ContentEncoding.IDENTITY, RE_SPACE.matcher(req.header("Content-Encoding", "")).replaceAll(""), future));
 
         // return the url location as plain content
         Resp resp = cors(req.response()).code(201).header("Location", key);

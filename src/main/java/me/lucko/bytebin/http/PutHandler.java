@@ -25,10 +25,12 @@
 
 package me.lucko.bytebin.http;
 
+import java.util.List;
 import me.lucko.bytebin.content.Content;
 import me.lucko.bytebin.content.ContentCache;
 import me.lucko.bytebin.content.ContentStorageHandler;
 import me.lucko.bytebin.util.Compression;
+import me.lucko.bytebin.util.ContentEncoding;
 import me.lucko.bytebin.util.RateLimiter;
 import me.lucko.bytebin.util.TokenGenerator;
 import org.apache.logging.log4j.LogManager;
@@ -106,7 +108,8 @@ public final class PutHandler implements ReqHandler {
             String newContentType = req.header("Content-Type", oldContent.getContentType());
 
             // compress if necessary
-            boolean compressed = req.header("Content-Encoding", "").equals("gzip");
+            List<ContentEncoding> encodings = ContentEncoding.getEncoding(Compression.getProvidedEncoding(req.header("Content-Encoding", "")));
+            boolean compressed = encodings.size() == 2 && encodings.get(0) == ContentEncoding.GZIP;
             if (!compressed) {
                 newContent.set(Compression.compress(newContent.get()));
             }

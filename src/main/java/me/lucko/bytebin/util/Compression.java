@@ -26,8 +26,10 @@
 package me.lucko.bytebin.util;
 
 import com.google.common.base.Splitter;
-import com.google.common.collect.Iterables;
 import com.google.common.io.ByteStreams;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.regex.Pattern;
 import org.rapidoid.http.Req;
 
 import java.io.ByteArrayInputStream;
@@ -39,11 +41,34 @@ import java.util.zip.GZIPOutputStream;
 public final class Compression {
     private Compression() {}
 
-    private static final Splitter COMMA_SPLITTER = Splitter.on(", ");
+    private static final Splitter COMMA_SPLITTER = Splitter.on(Pattern.compile(",\\s*"));
+    private static final Pattern RE_SEMICOLON = Pattern.compile(";\\s*");
 
-    public static boolean acceptsCompressed(Req req) {
+    public static List<String> getSupportedEncoding(Req req) {
+        List<String> retVal = new ArrayList<>(2);
         String header = req.header("Accept-Encoding", null);
-        return header != null && Iterables.contains(COMMA_SPLITTER.split(header), "gzip");
+        if (header != null) {
+            for (String typeStr : COMMA_SPLITTER.split(header)) {
+                retVal.add(RE_SEMICOLON.split(typeStr)[0]);
+            }
+        }
+        if (!retVal.contains("identity") && !retVal.contains("*")) {
+            retVal.add("identity");
+        }
+        return retVal;
+    }
+
+    public static List<String> getProvidedEncoding(String header) {
+        List<String> retVal = new ArrayList<>(2);
+        if (header != null && !header.isEmpty()) {
+            for (String typeStr : COMMA_SPLITTER.split(header)) {
+                retVal.add(typeStr);
+            }
+        }
+        if (!retVal.contains("identity")) {
+            retVal.add("identity");
+        }
+        return retVal;
     }
 
     public static byte[] compress(byte[] buf) {
