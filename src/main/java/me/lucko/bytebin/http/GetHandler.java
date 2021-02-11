@@ -120,7 +120,7 @@ public final class GetHandler implements ReqHandler {
             // https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/Accept-Encoding
             if (encodings.contains(ContentEncoding.OTHER)) {
                 // content-encoding is unknown, so must match accept-encoding
-                if (supportedEncodings.contains("*") || supportedEncodings.containsAll(Compression.getProvidedEncoding(content.getEncoding()))) {
+                if (supportedEncodings.contains("*") || supportedEncodings.containsAll(encodingStrings)) {
                     resp.header("Content-Encoding", content.getEncoding())
                             .body(content.getContent())
                             .contentType(MediaType.of(content.getContentType()))
