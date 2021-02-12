@@ -7,7 +7,7 @@
     <style>
         * {
             box-sizing: border-box;
-            font-family: monospace;
+            font-family: Monaco, Consolas, monospace;
             font-size: 1.0em;
         }
 
@@ -65,7 +65,7 @@
         }
     </style>
 
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/pako/1.0.10/pako_deflate.min.js" integrity="sha256-JJTNgfqzhglbcMhb6V4GQycz+CjEugL5QO0FxUCHEUs=" crossorigin="anonymous" defer></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pako/2.0.3/pako_deflate.min.js" integrity="sha512-1LtY6ivTYdyp7yVk1N3ZW2wHWT+nA36dWhLNmg5FORFhEAMPdDXG30E1KeeZDYO9659MYjQBIqWEL9EnNOBb4w==" crossorigin="anonymous"></script>
 
     <script type="text/javascript">
         function submit() {
@@ -91,12 +91,12 @@
 </head>
 
 <body>
-<div id="content-wrapper">
-    <textarea id="content" spellcheck="false" placeholder="Type/paste the context you'd like to upload here..."></textarea>
-</div>
 <div id="nav">
-    <a class="nav-left" href="https://github.com/lucko/bytebin">[about bytebin]</a>
-    <a onclick="submit()">[upload]</a>
+    <a class="nav-left" onclick="submit()">[upload]</a>
+    <a href="https://github.com/lucko/bytebin" target="_blank">[about bytebin]</a>
+</div>
+<div id="content-wrapper">
+    <textarea autofocus id="content" spellcheck="false" placeholder="Type or paste your content here, then click 'upload'..."></textarea>
 </div>
 </body>
 </html>
