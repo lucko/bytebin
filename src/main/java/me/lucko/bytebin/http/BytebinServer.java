@@ -44,11 +44,6 @@ public class BytebinServer {
     /** Logger instance */
     private static final Logger LOGGER = LogManager.getLogger(BytebinServer.class);
 
-    /** Executor service used for logging. */
-    //private final ExecutorService loggingExecutor = Executors.newSingleThreadExecutor(
-    //        new ThreadFactoryBuilder().setNameFormat("bytebin-logging-%d").build()
-    //);
-
     private final Setup server;
 
     public BytebinServer(ContentStorageHandler contentStorageHandler, ContentCache contentCache, String host, int port, RateLimiter postRateLimiter, RateLimiter putRateLimiter, RateLimiter readRateLimiter, byte[] indexPage, TokenGenerator contentTokenGenerator, long maxContentLength, long lifetimeMillis, Map<String, Long> lifetimeMillisByUserAgent) {
@@ -69,10 +64,6 @@ public class BytebinServer {
         this.server.get("/*").managed(false).cacheCapacity(0).serve(new GetHandler(this, readRateLimiter, contentCache));
         this.server.put("/*").managed(false).cacheCapacity(0).serve(new PutHandler(this, putRateLimiter, contentStorageHandler, contentCache, maxContentLength, lifetimeMillis));
     }
-
-    //public ExecutorService getLoggingExecutor() {
-    //    return this.loggingExecutor;
-    //}
 
     public void start() {
         this.server.activate();

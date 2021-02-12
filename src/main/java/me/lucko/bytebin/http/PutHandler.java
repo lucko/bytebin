@@ -125,30 +125,17 @@ public final class PutHandler implements ReqHandler {
 
             long newExpiry = System.currentTimeMillis() + this.lifetimeMillis;
 
-            /*this.server.getLoggingExecutor().submit(() -> {
-                String hostname = null;
-                try {
-                    InetAddress inetAddress = InetAddress.getByName(ipAddress);
-                    hostname = inetAddress.getCanonicalHostName();
-                    if (ipAddress.equals(hostname)) {
-                        hostname = null;
-                    }
-                } catch (Exception e) {
-                    // ignore
-                }*/
-
-                String origin = req.header("Origin", null);
-                LOGGER.info("[PUT]\n" +
-                        "    key = " + path + "\n" +
-                        "    new type = " + new String(newContentType.getBytes()) + "\n" +
-                        "    new encoding = " + new String(newEncoding.getBytes()) + "\n" +
-                        "    user agent = " + req.header("User-Agent", "null") + "\n" +
-                        //"    origin = " + ipAddress + (hostname != null ? " (" + hostname + ")" : "") + "\n" +
-                        "    ip = " + ipAddress + "\n" +
-                        (origin == null ? "" : "    origin = " + origin + "\n") +
-                        "    old content size = " + String.format("%,d", oldContent.getContent().length / 1024) + " KB" + "\n" +
-                        "    new content size = " + String.format("%,d", newContent.get().length / 1024) + " KB" + "\n");
-            //});
+            String origin = req.header("Origin", null);
+            LOGGER.info("[PUT]\n" +
+                    "    key = " + path + "\n" +
+                    "    new type = " + new String(newContentType.getBytes()) + "\n" +
+                    "    new encoding = " + new String(newEncoding.getBytes()) + "\n" +
+                    "    user agent = " + req.header("User-Agent", "null") + "\n" +
+                    "    ip = " + ipAddress + "\n" +
+                    (origin == null ? "" : "    origin = " + origin + "\n") +
+                    "    old content size = " + String.format("%,d", oldContent.getContent().length / 1024) + " KB" + "\n" +
+                    "    new content size = " + String.format("%,d", newContent.get().length / 1024) + " KB" + "\n"
+            );
 
             // update the content instance with the new data
             oldContent.setContentType(newContentType);

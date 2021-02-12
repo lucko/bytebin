@@ -76,26 +76,13 @@ public final class GetHandler implements ReqHandler {
         // request the file from the cache async
         List<String> supportedEncodings = Compression.getSupportedEncoding(req);
 
-        /*this.server.getLoggingExecutor().submit(() -> {
-            String hostname = null;
-            try {
-                InetAddress inetAddress = InetAddress.getByName(ipAddress);
-                hostname = inetAddress.getCanonicalHostName();
-                if (ipAddress.equals(hostname)) {
-                    hostname = null;
-                }
-            } catch (Exception e) {
-                // ignore
-            }*/
-            String origin = req.header("Origin", null);
-            LOGGER.info("[REQUEST]\n" +
-                    "    key = " + path + "\n" +
-                    "    user agent = " + req.header("User-Agent", "null") + "\n" +
-                    //"    origin = " + ipAddress + (hostname != null ? " (" + hostname + ")" : "") + "\n" +
-                    "    ip = " + ipAddress + "\n" +
-                    (origin == null ? "" : "    origin = " + origin + "\n"));
-                    //"    supports compression = " + (supportedEncodings.size() == 2 && ContentEncoding.GZIP.getEncoding().equals(supportedEncodings.get(0))) + "\n");
-        //});
+        String origin = req.header("Origin", null);
+        LOGGER.info("[REQUEST]\n" +
+                "    key = " + path + "\n" +
+                "    user agent = " + req.header("User-Agent", "null") + "\n" +
+                "    ip = " + ipAddress + "\n" +
+                (origin == null ? "" : "    origin = " + origin + "\n")
+        );
 
         this.contentCache.get(path).whenCompleteAsync((content, throwable) -> {
             if (throwable != null || content == null || content.getKey() == null || content.getContent().length == 0) {

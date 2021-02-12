@@ -115,29 +115,14 @@ public final class PostHandler implements ReqHandler {
             authKey = null;
         }
 
-        /*this.server.getLoggingExecutor().submit(() -> {
-            String hostname = null;
-            try {
-                InetAddress inetAddress = InetAddress.getByName(ipAddress);
-                hostname = inetAddress.getCanonicalHostName();
-                if (ipAddress.equals(hostname)) {
-                    hostname = null;
-                }
-            } catch (Exception e) {
-                // ignore
-            }*/
-
-            LOGGER.info("[POST]\n" +
-                    "    key = " + key + "\n" +
-                    "    type = " + contentType + "\n" +
-                    "    user agent = " + userAgent + "\n" +
-                    //"    origin = " + ipAddress + (hostname != null ? " (" + hostname + ")" : "") + "\n" +
-                    "    ip = " + ipAddress + "\n" +
-                    (origin.equals("null") ? "" : "    origin = " + origin + "\n") +
-                    "    content size = " + String.format("%,d", content.length / 1024) + " KB" + (encodings.size() == 2 && encodings.get(0) == ContentEncoding.GZIP ? " (compressed)" : "") + "\n");
-                    //"    compressed = " + !requiresCompression.get() + "\n" +
-                    //"    allow modification = " + allowModifications + "\n");
-        //});
+        LOGGER.info("[POST]\n" +
+                "    key = " + key + "\n" +
+                "    type = " + contentType + "\n" +
+                "    user agent = " + userAgent + "\n" +
+                "    ip = " + ipAddress + "\n" +
+                (origin.equals("null") ? "" : "    origin = " + origin + "\n") +
+                "    content size = " + String.format("%,d", content.length / 1024) + " KB" + (encodings.size() == 2 && encodings.get(0) == ContentEncoding.GZIP ? " (compressed)" : "") + "\n"
+        );
 
         // record the content in the cache
         CompletableFuture<Content> future = new CompletableFuture<>();
