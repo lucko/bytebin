@@ -25,10 +25,12 @@
 
 package me.lucko.bytebin.http;
 
+import java.util.List;
 import me.lucko.bytebin.content.Content;
 import me.lucko.bytebin.content.ContentCache;
 import me.lucko.bytebin.content.ContentStorageHandler;
 import me.lucko.bytebin.util.Compression;
+import me.lucko.bytebin.util.ContentEncoding;
 import me.lucko.bytebin.util.RateLimiter;
 import me.lucko.bytebin.util.TokenGenerator;
 import org.apache.logging.log4j.LogManager;
@@ -105,8 +107,12 @@ public final class PutHandler implements ReqHandler {
             // determine the new content type
             String newContentType = req.header("Content-Type", oldContent.getContentType());
 
+            // determine new encoding
+            String newEncoding = req.header("Content-Encoding", oldContent.getEncoding());
+
             // compress if necessary
-            boolean compressed = req.header("Content-Encoding", "").equals("gzip");
+            List<ContentEncoding> encodings = ContentEncoding.getEncoding(Compression.getProvidedEncoding(newEncoding));
+            boolean compressed = encodings.size() == 2 && encodings.get(0) == ContentEncoding.GZIP;
             if (!compressed) {
                 newContent.set(Compression.compress(newContent.get()));
             }
@@ -135,6 +141,7 @@ public final class PutHandler implements ReqHandler {
                 LOGGER.info("[PUT]\n" +
                         "    key = " + path + "\n" +
                         "    new type = " + new String(newContentType.getBytes()) + "\n" +
+                        "    new encoding = " + new String(newEncoding.getBytes()) + "\n" +
                         "    user agent = " + req.header("User-Agent", "null") + "\n" +
                         //"    origin = " + ipAddress + (hostname != null ? " (" + hostname + ")" : "") + "\n" +
                         "    ip = " + ipAddress + "\n" +
@@ -145,6 +152,7 @@ public final class PutHandler implements ReqHandler {
 
             // update the content instance with the new data
             oldContent.setContentType(newContentType);
+            oldContent.setEncoding(newEncoding);
             oldContent.setExpiry(newExpiry);
             oldContent.setLastModified(System.currentTimeMillis());
             oldContent.setContent(newContent.get());

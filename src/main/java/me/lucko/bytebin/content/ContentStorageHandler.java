@@ -27,6 +27,7 @@ package me.lucko.bytebin.content;
 
 import com.github.benmanes.caffeine.cache.CacheLoader;
 import me.lucko.bytebin.util.Compression;
+import me.lucko.bytebin.util.ContentEncoding;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
@@ -113,11 +114,21 @@ public class ContentStorageHandler implements CacheLoader<String, Content> {
                 authKey = in.readUTF();
             }
 
+            // read encoding
+            String encoding;
+            if (version == 1) {
+                encoding = ContentEncoding.GZIP.getEncoding() + "," + ContentEncoding.IDENTITY.getEncoding();
+            } else {
+                byte[] encodingBytes = new byte[in.readInt()];
+                in.readFully(encodingBytes);
+                encoding = new String(encodingBytes);
+            }
+
             // read content
             byte[] content = new byte[in.readInt()];
             in.readFully(content);
 
-            return new Content(key, contentType, expiry, lastModified, modifiable, authKey, content);
+            return new Content(key, contentType, expiry, lastModified, modifiable, authKey, encoding, content);
         }
     }
 
@@ -151,18 +162,28 @@ public class ContentStorageHandler implements CacheLoader<String, Content> {
                 authKey = in.readUTF();
             }
 
-            return new Content(key, contentType, expiry, lastModified, modifiable, authKey, Content.EMPTY_BYTES);
+            // read encoding
+            String encoding;
+            if (version == 1) {
+                encoding = ContentEncoding.GZIP.getEncoding() + "," + ContentEncoding.IDENTITY.getEncoding();
+            } else {
+                byte[] encodingBytes = new byte[in.readInt()];
+                in.readFully(encodingBytes);
+                encoding = new String(encodingBytes);
+            }
+
+            return new Content(key, contentType, expiry, lastModified, modifiable, authKey, encoding, Content.EMPTY_BYTES);
         }
     }
 
-    public void save(String key, String contentType, byte[] content, long expiry, String authKey, boolean requiresCompression, CompletableFuture<Content> future) {
+    public void save(String key, String contentType, byte[] content, long expiry, String authKey, boolean requiresCompression, String encoding, CompletableFuture<Content> future) {
         if (requiresCompression) {
             content = Compression.compress(content);
         }
 
         // add directly to the cache
         // it's quite likely that the file will be requested only a few seconds after it is uploaded
-        Content c = new Content(key, contentType, expiry, System.currentTimeMillis(), authKey != null, authKey, content);
+        Content c = new Content(key, contentType, expiry, System.currentTimeMillis(), authKey != null, authKey, encoding, content);
         future.complete(c);
 
         save(c);
@@ -174,7 +195,7 @@ public class ContentStorageHandler implements CacheLoader<String, Content> {
 
         try (DataOutputStream out = new DataOutputStream(new BufferedOutputStream(Files.newOutputStream(path)))) {
             // write version
-            out.writeInt(1);
+            out.writeInt(2);
 
             // write name
             out.writeUTF(c.getKey());
@@ -195,6 +216,11 @@ public class ContentStorageHandler implements CacheLoader<String, Content> {
             if (c.isModifiable()) {
                 out.writeUTF(c.getAuthKey());
             }
+
+            // write encoding
+            byte[] encoding = c.getEncoding().getBytes();
+            out.writeInt(encoding.length);
+            out.write(encoding);
 
             // write content
             out.writeInt(c.getContent().length);

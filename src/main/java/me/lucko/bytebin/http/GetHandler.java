@@ -25,8 +25,10 @@
 
 package me.lucko.bytebin.http;
 
+import java.util.List;
 import me.lucko.bytebin.content.ContentCache;
 import me.lucko.bytebin.util.Compression;
+import me.lucko.bytebin.util.ContentEncoding;
 import me.lucko.bytebin.util.RateLimiter;
 import me.lucko.bytebin.util.TokenGenerator;
 import org.apache.logging.log4j.LogManager;
@@ -72,7 +74,7 @@ public final class GetHandler implements ReqHandler {
         if (this.rateLimiter.check(ipAddress)) return cors(req.response()).code(429).plain("Rate limit exceeded");
 
         // request the file from the cache async
-        boolean supportsCompression = Compression.acceptsCompressed(req);
+        List<String> supportedEncodings = Compression.getSupportedEncoding(req);
 
         /*this.server.getLoggingExecutor().submit(() -> {
             String hostname = null;
@@ -92,7 +94,7 @@ public final class GetHandler implements ReqHandler {
                     //"    origin = " + ipAddress + (hostname != null ? " (" + hostname + ")" : "") + "\n" +
                     "    ip = " + ipAddress + "\n" +
                     (origin == null ? "" : "    origin = " + origin + "\n"));
-                    //"    supports compression = " + supportsCompression + "\n");
+                    //"    supports compression = " + (supportedEncodings.size() == 2 && ContentEncoding.GZIP.getEncoding().equals(supportedEncodings.get(0))) + "\n");
         //});
 
         this.contentCache.get(path).whenCompleteAsync((content, throwable) -> {
@@ -112,9 +114,25 @@ public final class GetHandler implements ReqHandler {
                 resp.header("Cache-Control", "public, max-age=" + (expires / 1000L));
             }
 
-            // will the client accept the content in a compressed form?
-            if (supportsCompression) {
-                resp.header("Content-Encoding", "gzip")
+            List<String> encodingStrings = Compression.getProvidedEncoding(content.getEncoding());
+            List<ContentEncoding> encodings = ContentEncoding.getEncoding(encodingStrings);
+
+            // https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/Accept-Encoding
+            if (encodings.contains(ContentEncoding.OTHER)) {
+                // content-encoding is unknown, so must match accept-encoding
+                if (supportedEncodings.contains("*") || supportedEncodings.containsAll(encodingStrings)) {
+                    resp.header("Content-Encoding", content.getEncoding())
+                            .body(content.getContent())
+                            .contentType(MediaType.of(content.getContentType()))
+                            .done();
+                } else {
+                    // https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/406
+                    cors(req.response()).code(406).plain("Accept-Encoding \"" + req.header("Accept-Encoding", "") + "\" does not contain Content-Encoding \"" + content.getEncoding() + "\"").done();
+                }
+                return;
+            } else if ((encodings.size() == 2 && encodings.get(0) == ContentEncoding.GZIP) && (supportedEncodings.contains("*") || (supportedEncodings.size() == 2 && ContentEncoding.GZIP.getEncoding().equals(supportedEncodings.get(0))))) {
+                // the client will accept gzip
+                resp.header("Content-Encoding", ContentEncoding.GZIP.getEncoding())
                         .body(content.getContent())
                         .contentType(MediaType.of(content.getContentType()))
                         .done();
