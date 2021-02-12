@@ -25,8 +25,6 @@
 
 package me.lucko.bytebin.content;
 
-import me.lucko.bytebin.util.ContentEncoding;
-
 /**
  * Encapsulates content within the service
  */
@@ -36,7 +34,7 @@ public final class Content {
     public static final byte[] EMPTY_BYTES = new byte[0];
 
     /** Empty content instance */
-    public static final Content EMPTY_CONTENT = new Content(null, "text/plain", Long.MAX_VALUE, Long.MIN_VALUE, false, null, ContentEncoding.IDENTITY.getEncoding(), EMPTY_BYTES);
+    public static final Content EMPTY_CONTENT = new Content(null, "text/plain", Long.MAX_VALUE, Long.MIN_VALUE, false, null, "", EMPTY_BYTES);
 
     /** Number of bytes in a megabyte */
     public static final long MEGABYTE_LENGTH = 1024L * 1024L;

@@ -25,12 +25,12 @@
 
 package me.lucko.bytebin.http;
 
-import java.util.List;
 import me.lucko.bytebin.content.ContentCache;
-import me.lucko.bytebin.util.Compression;
 import me.lucko.bytebin.util.ContentEncoding;
+import me.lucko.bytebin.util.Gzip;
 import me.lucko.bytebin.util.RateLimiter;
 import me.lucko.bytebin.util.TokenGenerator;
+
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.rapidoid.http.MediaType;
@@ -42,8 +42,10 @@ import java.io.IOException;
 import java.time.Instant;
 import java.time.ZoneOffset;
 import java.time.format.DateTimeFormatter;
+import java.util.List;
+import java.util.Set;
 
-import static me.lucko.bytebin.http.BytebinServer.*;
+import static me.lucko.bytebin.http.BytebinServer.cors;
 
 public final class GetHandler implements ReqHandler {
 
@@ -73,8 +75,9 @@ public final class GetHandler implements ReqHandler {
         // check rate limits
         if (this.rateLimiter.check(ipAddress)) return cors(req.response()).code(429).plain("Rate limit exceeded");
 
-        // request the file from the cache async
-        List<String> supportedEncodings = Compression.getSupportedEncoding(req);
+        // get the encodings supported by the requester
+        // https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/Accept-Encoding
+        Set<String> supportedEncodings = ContentEncoding.getAcceptedEncoding(req);
 
         String origin = req.header("Origin", null);
         LOGGER.info("[REQUEST]\n" +
@@ -84,6 +87,7 @@ public final class GetHandler implements ReqHandler {
                 (origin == null ? "" : "    origin = " + origin + "\n")
         );
 
+        // request the file from the cache async
         this.contentCache.get(path).whenCompleteAsync((content, throwable) -> {
             if (throwable != null || content == null || content.getKey() == null || content.getContent().length == 0) {
                 cors(req.response()).code(404).plain("Invalid path").done();
@@ -101,44 +105,37 @@ public final class GetHandler implements ReqHandler {
                 resp.header("Cache-Control", "public, max-age=" + (expires / 1000L));
             }
 
-            List<String> encodingStrings = Compression.getProvidedEncoding(content.getEncoding());
-            List<ContentEncoding> encodings = ContentEncoding.getEncoding(encodingStrings);
+            List<String> contentEncodingStrings = ContentEncoding.getContentEncoding(content.getEncoding());
 
-            // https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/Accept-Encoding
-            if (encodings.contains(ContentEncoding.OTHER)) {
-                // content-encoding is unknown, so must match accept-encoding
-                if (supportedEncodings.contains("*") || supportedEncodings.containsAll(encodingStrings)) {
-                    resp.header("Content-Encoding", content.getEncoding())
-                            .body(content.getContent())
-                            .contentType(MediaType.of(content.getContentType()))
-                            .done();
-                } else {
-                    // https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/406
-                    cors(req.response()).code(406).plain("Accept-Encoding \"" + req.header("Accept-Encoding", "") + "\" does not contain Content-Encoding \"" + content.getEncoding() + "\"").done();
-                }
-                return;
-            } else if ((encodings.size() == 2 && encodings.get(0) == ContentEncoding.GZIP) && (supportedEncodings.contains("*") || (supportedEncodings.size() == 2 && ContentEncoding.GZIP.getEncoding().equals(supportedEncodings.get(0))))) {
-                // the client will accept gzip
-                resp.header("Content-Encoding", ContentEncoding.GZIP.getEncoding())
+            // requester supports the used content encoding, just serve as-is
+            if (supportedEncodings.contains("*") || supportedEncodings.containsAll(contentEncodingStrings)) {
+                resp.header("Content-Encoding", content.getEncoding())
                         .body(content.getContent())
                         .contentType(MediaType.of(content.getContentType()))
                         .done();
                 return;
             }
 
-            // need to uncompress
-            byte[] uncompressed;
-            try {
-                uncompressed = Compression.decompress(content.getContent());
-            } catch (IOException e) {
-                cors(req.response()).code(404).plain("Unable to uncompress data").done();
+            // if it's compressed using gzip, we will uncompress on the server side
+            if (contentEncodingStrings.size() == 1 && contentEncodingStrings.get(0).equals(ContentEncoding.GZIP)) {
+                byte[] uncompressed;
+                try {
+                    uncompressed = Gzip.decompress(content.getContent());
+                } catch (IOException e) {
+                    cors(req.response()).code(404).plain("Unable to uncompress data").done();
+                    return;
+                }
+
+                // return the uncompressed data
+                resp.body(uncompressed)
+                        .contentType(MediaType.of(content.getContentType()))
+                        .done();
                 return;
             }
 
-            // return the data
-            resp.body(uncompressed)
-                    .contentType(MediaType.of(content.getContentType()))
-                    .done();
+            // requester doesn't support the content encoding - there's nothing we can do
+            // https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/406
+            cors(req.response()).code(406).plain("Accept-Encoding \"" + req.header("Accept-Encoding", "") + "\" does not contain Content-Encoding \"" + content.getEncoding() + "\"").done();
         });
 
         // mark that we're going to respond later

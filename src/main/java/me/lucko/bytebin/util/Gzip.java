@@ -25,12 +25,7 @@
 
 package me.lucko.bytebin.util;
 
-import com.google.common.base.Splitter;
 import com.google.common.io.ByteStreams;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.regex.Pattern;
-import org.rapidoid.http.Req;
 
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
@@ -38,39 +33,8 @@ import java.io.IOException;
 import java.util.zip.GZIPInputStream;
 import java.util.zip.GZIPOutputStream;
 
-public final class Compression {
-    private Compression() {}
-
-    private static final Splitter COMMA_SPLITTER = Splitter.on(Pattern.compile(",\\s*"));
-    private static final Pattern RE_SEMICOLON = Pattern.compile(";\\s*");
-
-    public static List<String> getSupportedEncoding(Req req) {
-        List<String> retVal = new ArrayList<>(2);
-        String header = req.header("Accept-Encoding", null);
-        if (header != null) {
-            for (String typeStr : COMMA_SPLITTER.split(header)) {
-                typeStr = RE_SEMICOLON.split(typeStr)[0];
-                retVal.add("x-gzip".equals(typeStr) ? ContentEncoding.GZIP.getEncoding() : typeStr);
-            }
-        }
-        if (!retVal.contains("*") && !retVal.contains(ContentEncoding.IDENTITY.getEncoding())) {
-            retVal.add(ContentEncoding.IDENTITY.getEncoding());
-        }
-        return retVal;
-    }
-
-    public static List<String> getProvidedEncoding(String header) {
-        List<String> retVal = new ArrayList<>(2);
-        if (header != null && !header.isEmpty()) {
-            for (String typeStr : COMMA_SPLITTER.split(header)) {
-                retVal.add("x-gzip".equals(typeStr) ? ContentEncoding.GZIP.getEncoding() : typeStr);
-            }
-        }
-        if (!retVal.contains(ContentEncoding.IDENTITY.getEncoding())) {
-            retVal.add(ContentEncoding.IDENTITY.getEncoding());
-        }
-        return retVal;
-    }
+public final class Gzip {
+    private Gzip() {}
 
     public static byte[] compress(byte[] buf) {
         ByteArrayOutputStream out = new ByteArrayOutputStream(buf.length);

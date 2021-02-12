@@ -25,22 +25,23 @@
 
 package me.lucko.bytebin.http;
 
-import java.util.List;
 import me.lucko.bytebin.content.Content;
 import me.lucko.bytebin.content.ContentCache;
 import me.lucko.bytebin.content.ContentStorageHandler;
-import me.lucko.bytebin.util.Compression;
 import me.lucko.bytebin.util.ContentEncoding;
+import me.lucko.bytebin.util.Gzip;
 import me.lucko.bytebin.util.RateLimiter;
 import me.lucko.bytebin.util.TokenGenerator;
+
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.rapidoid.http.Req;
 import org.rapidoid.http.ReqHandler;
 
+import java.util.List;
 import java.util.concurrent.atomic.AtomicReference;
 
-import static me.lucko.bytebin.http.BytebinServer.*;
+import static me.lucko.bytebin.http.BytebinServer.cors;
 
 public final class PutHandler implements ReqHandler {
 
@@ -91,15 +92,9 @@ public final class PutHandler implements ReqHandler {
                 return;
             }
 
-            // ok so the old content does exist, check that it is modifiable
-            if (!oldContent.isModifiable()) {
+            // ok so the old content does exist, check that it is modifiable & that the key matches
+            if (!oldContent.isModifiable() || !oldContent.getAuthKey().equals(authKey)) {
                 // use a generic response to prevent use of this endpoint to search for valid content
-                cors(req.response()).code(403).plain("Incorrect modification key").done();
-                return;
-            }
-
-            // check the auth key matches
-            if (!oldContent.getAuthKey().equals(authKey)) {
                 cors(req.response()).code(403).plain("Incorrect modification key").done();
                 return;
             }
@@ -108,13 +103,12 @@ public final class PutHandler implements ReqHandler {
             String newContentType = req.header("Content-Type", oldContent.getContentType());
 
             // determine new encoding
-            String newEncoding = req.header("Content-Encoding", oldContent.getEncoding());
+            List<String> newEncodings = ContentEncoding.getContentEncoding(req.header("Content-Encoding", ""));
 
             // compress if necessary
-            List<ContentEncoding> encodings = ContentEncoding.getEncoding(Compression.getProvidedEncoding(newEncoding));
-            boolean compressed = encodings.size() == 2 && encodings.get(0) == ContentEncoding.GZIP;
-            if (!compressed) {
-                newContent.set(Compression.compress(newContent.get()));
+            if (newEncodings.isEmpty()) {
+                newContent.set(Gzip.compress(newContent.get()));
+                newEncodings.add(ContentEncoding.GZIP);
             }
 
             // check max content length
@@ -129,7 +123,7 @@ public final class PutHandler implements ReqHandler {
             LOGGER.info("[PUT]\n" +
                     "    key = " + path + "\n" +
                     "    new type = " + new String(newContentType.getBytes()) + "\n" +
-                    "    new encoding = " + new String(newEncoding.getBytes()) + "\n" +
+                    "    new encoding = " + newEncodings.toString() + "\n" +
                     "    user agent = " + req.header("User-Agent", "null") + "\n" +
                     "    ip = " + ipAddress + "\n" +
                     (origin == null ? "" : "    origin = " + origin + "\n") +
@@ -139,7 +133,7 @@ public final class PutHandler implements ReqHandler {
 
             // update the content instance with the new data
             oldContent.setContentType(newContentType);
-            oldContent.setEncoding(newEncoding);
+            oldContent.setEncoding(String.join(",", newEncodings));
             oldContent.setExpiry(newExpiry);
             oldContent.setLastModified(System.currentTimeMillis());
             oldContent.setContent(newContent.get());

@@ -28,6 +28,7 @@ package me.lucko.bytebin;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.io.CharStreams;
 import com.google.common.util.concurrent.ThreadFactoryBuilder;
+
 import me.lucko.bytebin.content.Content;
 import me.lucko.bytebin.content.ContentCache;
 import me.lucko.bytebin.content.ContentStorageHandler;
@@ -35,6 +36,7 @@ import me.lucko.bytebin.http.BytebinServer;
 import me.lucko.bytebin.util.Configuration;
 import me.lucko.bytebin.util.RateLimiter;
 import me.lucko.bytebin.util.TokenGenerator;
+
 import org.apache.logging.log4j.Level;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;

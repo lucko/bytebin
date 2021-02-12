@@ -25,15 +25,13 @@
 
 package me.lucko.bytebin.http;
 
-import java.util.List;
-import java.util.regex.Pattern;
 import me.lucko.bytebin.content.Content;
 import me.lucko.bytebin.content.ContentCache;
 import me.lucko.bytebin.content.ContentStorageHandler;
-import me.lucko.bytebin.util.Compression;
 import me.lucko.bytebin.util.ContentEncoding;
 import me.lucko.bytebin.util.RateLimiter;
 import me.lucko.bytebin.util.TokenGenerator;
+
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.rapidoid.http.Req;
@@ -41,10 +39,12 @@ import org.rapidoid.http.ReqHandler;
 import org.rapidoid.http.Resp;
 import org.rapidoid.u.U;
 
+import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
+import java.util.regex.Pattern;
 
-import static me.lucko.bytebin.http.BytebinServer.*;
+import static me.lucko.bytebin.http.BytebinServer.cors;
 
 public final class PostHandler implements ReqHandler {
 
@@ -95,7 +95,7 @@ public final class PostHandler implements ReqHandler {
 
         // get the content encodings
         // https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/Content-Encoding
-        List<ContentEncoding> encodings = ContentEncoding.getEncoding(Compression.getProvidedEncoding(req.header("Content-Encoding", "")));
+        List<String> encodings = ContentEncoding.getContentEncoding(req.header("Content-Encoding", ""));
 
         // get the user agent & origin headers
         String userAgent = req.header("User-Agent", "null");
@@ -121,15 +121,22 @@ public final class PostHandler implements ReqHandler {
                 "    user agent = " + userAgent + "\n" +
                 "    ip = " + ipAddress + "\n" +
                 (origin.equals("null") ? "" : "    origin = " + origin + "\n") +
-                "    content size = " + String.format("%,d", content.length / 1024) + " KB" + (encodings.size() == 2 && encodings.get(0) == ContentEncoding.GZIP ? " (compressed)" : "") + "\n"
+                "    content size = " + String.format("%,d", content.length / 1024) + " KB\n" +
+                "    encoding = " + encodings.toString() + "\n"
         );
 
         // record the content in the cache
         CompletableFuture<Content> future = new CompletableFuture<>();
         this.contentCache.put(key, future);
 
-        // save the data to the filesystem
-        this.contentStorageHandler.getExecutor().execute(() -> this.contentStorageHandler.save(key, contentType, content, expiry, authKey, encodings.size() == 1 && encodings.get(0) == ContentEncoding.IDENTITY, RE_SPACE.matcher(req.header("Content-Encoding", "")).replaceAll(""), future));
+        // check whether the content should be compressed by bytebin before saving
+        boolean compressServerSide = encodings.isEmpty();
+        if (compressServerSide) {
+            encodings.add(ContentEncoding.GZIP);
+        }
+
+        String encoding = String.join(",", encodings);
+        this.contentStorageHandler.getExecutor().execute(() -> this.contentStorageHandler.save(key, contentType, content, expiry, authKey, compressServerSide, encoding, future));
 
         // return the url location as plain content
         Resp resp = cors(req.response()).code(201).header("Location", key);

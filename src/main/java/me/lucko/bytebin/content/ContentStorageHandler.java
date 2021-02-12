@@ -26,8 +26,10 @@
 package me.lucko.bytebin.content;
 
 import com.github.benmanes.caffeine.cache.CacheLoader;
-import me.lucko.bytebin.util.Compression;
+
 import me.lucko.bytebin.util.ContentEncoding;
+import me.lucko.bytebin.util.Gzip;
+
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
@@ -117,7 +119,7 @@ public class ContentStorageHandler implements CacheLoader<String, Content> {
             // read encoding
             String encoding;
             if (version == 1) {
-                encoding = ContentEncoding.GZIP.getEncoding() + "," + ContentEncoding.IDENTITY.getEncoding();
+                encoding = ContentEncoding.GZIP;
             } else {
                 byte[] encodingBytes = new byte[in.readInt()];
                 in.readFully(encodingBytes);
@@ -165,7 +167,7 @@ public class ContentStorageHandler implements CacheLoader<String, Content> {
             // read encoding
             String encoding;
             if (version == 1) {
-                encoding = ContentEncoding.GZIP.getEncoding() + "," + ContentEncoding.IDENTITY.getEncoding();
+                encoding = ContentEncoding.GZIP;
             } else {
                 byte[] encodingBytes = new byte[in.readInt()];
                 in.readFully(encodingBytes);
@@ -178,7 +180,7 @@ public class ContentStorageHandler implements CacheLoader<String, Content> {
 
     public void save(String key, String contentType, byte[] content, long expiry, String authKey, boolean requiresCompression, String encoding, CompletableFuture<Content> future) {
         if (requiresCompression) {
-            content = Compression.compress(content);
+            content = Gzip.compress(content);
         }
 
         // add directly to the cache
