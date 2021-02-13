@@ -1,4 +1,5 @@
-# bytebin
+<h3 align="center"><img src="https://i.imgur.com/0dofgB4.png"></h3>
+<h1 align="center">bytebin</h1>
 
 bytebin is a fast & lightweight content storage web service.
 

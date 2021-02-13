@@ -26,6 +26,7 @@
 package me.lucko.bytebin;
 
 import com.google.common.collect.ImmutableMap;
+import com.google.common.io.ByteStreams;
 import com.google.common.io.CharStreams;
 import com.google.common.util.concurrent.ThreadFactoryBuilder;
 
@@ -43,6 +44,7 @@ import org.apache.logging.log4j.Logger;
 import org.apache.logging.log4j.io.IoBuilder;
 
 import java.io.IOException;
+import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Paths;
@@ -100,13 +102,8 @@ public final class Bytebin implements AutoCloseable {
                 config.getInt("cacheMaxSizeMb", 200)
         );
 
-        // load index page
-        byte[] indexPage;
-        try (InputStreamReader in = new InputStreamReader(Bytebin.class.getResourceAsStream("/index.html"), StandardCharsets.UTF_8)) {
-            indexPage = CharStreams.toString(in).getBytes(StandardCharsets.UTF_8);
-        } catch (IOException e) {
-            throw new RuntimeException(e);
-        }
+        byte[] indexPage = getResource("/index.html");
+        byte[] favicon = getResource("/favicon.ico");
 
         // setup the web server
         this.server = new BytebinServer(
@@ -130,6 +127,7 @@ public final class Bytebin implements AutoCloseable {
                         config.getInt("readRateLimit", 30)
                 ),
                 indexPage,
+                favicon,
                 new TokenGenerator(config.getInt("keyLength", 7)),
                 (Content.MEGABYTE_LENGTH * config.getInt("maxContentLengthMb", 10)),
                 TimeUnit.MINUTES.toMillis(config.getLong("lifetimeMinutes", TimeUnit.DAYS.toMinutes(1))),
@@ -149,6 +147,14 @@ public final class Bytebin implements AutoCloseable {
             this.executor.awaitTermination(30, TimeUnit.SECONDS);
         } catch (InterruptedException e) {
             LOGGER.error("Exception whilst shutting down executor", e);
+        }
+    }
+
+    private static byte[] getResource(String name) {
+        try (InputStream in = Bytebin.class.getResourceAsStream(name)) {
+            return ByteStreams.toByteArray(in);
+        } catch (IOException e) {
+            throw new RuntimeException(e);
         }
     }
 

@@ -33,6 +33,7 @@ import me.lucko.bytebin.util.TokenGenerator;
 
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
+import org.rapidoid.http.MediaType;
 import org.rapidoid.http.Req;
 import org.rapidoid.http.Resp;
 import org.rapidoid.setup.Setup;
@@ -46,7 +47,7 @@ public class BytebinServer {
 
     private final Setup server;
 
-    public BytebinServer(ContentStorageHandler contentStorageHandler, ContentCache contentCache, String host, int port, RateLimiter postRateLimiter, RateLimiter putRateLimiter, RateLimiter readRateLimiter, byte[] indexPage, TokenGenerator contentTokenGenerator, long maxContentLength, long lifetimeMillis, Map<String, Long> lifetimeMillisByUserAgent) {
+    public BytebinServer(ContentStorageHandler contentStorageHandler, ContentCache contentCache, String host, int port, RateLimiter postRateLimiter, RateLimiter putRateLimiter, RateLimiter readRateLimiter, byte[] indexPage, byte[] favicon, TokenGenerator contentTokenGenerator, long maxContentLength, long lifetimeMillis, Map<String, Long> lifetimeMillisByUserAgent) {
         this.server = Setup.create("bytebin");
         this.server.address(host).port(port);
 
@@ -60,6 +61,7 @@ public class BytebinServer {
         defineOptionsRoute(this.server, "/post", "POST", "Content-Type, Content-Encoding, Allow-Modification");
         defineOptionsRoute(this.server, "/*", "GET, PUT", "Content-Type, Content-Encoding, Modification-Key");
         this.server.page("/").html(indexPage);
+        this.server.get("/favicon.ico").serve(req -> cors(req.response()).code(200).contentType(MediaType.IMAGE_X_ICON).body(favicon));
         this.server.post("/post").managed(false).serve(new PostHandler(this, postRateLimiter, contentStorageHandler, contentCache, contentTokenGenerator, maxContentLength, lifetimeMillis, lifetimeMillisByUserAgent));
         this.server.get("/*").managed(false).cacheCapacity(0).serve(new GetHandler(this, readRateLimiter, contentCache));
         this.server.put("/*").managed(false).cacheCapacity(0).serve(new PutHandler(this, putRateLimiter, contentStorageHandler, contentCache, maxContentLength, lifetimeMillis));
