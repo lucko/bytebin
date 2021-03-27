@@ -17,6 +17,8 @@ bytebin is:
 
 I host a [public instance](#public-instances) of bytebin for some of my own projects, which you are welcome to use too.
 
+There is also a traditional "pastebin" frontend for sharing code/configs/whatever, see [lucko/paste](https://github.com/lucko/paste) for more information.
+
 ## API usage
 
 ### Read
@@ -44,10 +46,12 @@ You can use it in your application as long as:
 
 * you're not malicious
 * you don't needlessly spam it
-* your usage isn't illegal or going to get me into trouble
+* your usage isn't illegal, infringing copyright or otherwise going to get me into trouble
 * you provide a `User-Agent` header uniquely identifying your application
 
 If you're planning something likely to be super duper popular or use a lot of data (say >5GB per month across all users), then please [run it past me](https://lucko.me/) first - otherwise, go for it!
+
+If you come across any content which is illegal or infringes on copyright, please [get in touch](https://lucko.me/contact) and let me know so I can remove it.
 
 ## Credits
 
