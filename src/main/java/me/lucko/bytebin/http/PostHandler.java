@@ -83,7 +83,7 @@ public final class PostHandler implements ReqHandler {
         String ipAddress = BytebinServer.getIpAddress(req);
 
         // ensure something was actually posted
-        if (content.length == 0) return cors(req.response()).code(400).plain("Missing content");
+        if (content == null || content.length == 0) return cors(req.response()).code(400).plain("Missing content");
         // check rate limits
         if (this.rateLimiter.check(ipAddress)) return cors(req.response()).code(429).plain("Rate limit exceeded");
 
