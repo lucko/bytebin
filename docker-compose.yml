@@ -1,0 +1,17 @@
+version: "3.8"
+
+services:
+  bytebin:
+    image: ghcr.io/lucko/bytebin
+    ports:
+      - 3000:8080
+    volumes:
+      - data:/opt/bytebin/content
+    environment:
+      # You can configure bytebin using
+      # environment variables.
+      BYTEBIN_MISC_KEYLENGTH: 15
+      BYTEBIN_CONTENT_MAXSIZE: 5
+
+volumes:
+  data: {}
