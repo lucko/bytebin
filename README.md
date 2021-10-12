@@ -19,7 +19,24 @@ I host a [public instance](#public-instances) of bytebin for some of my own proj
 
 There is also a traditional "pastebin" frontend for sharing code/configs/whatever, see [lucko/paste](https://github.com/lucko/paste) for more information.
 
-## API usage
+## Hosting
+
+The easiest way to spin up a bytebin instance is using Docker.
+
+Create an image from the `Dockerfile`:
+```bash
+$ docker build -t bytebin .
+```
+
+Start a container:
+```bash
+$ docker run -dp 3000:8080 bytebin
+```
+
+You can then access the application at `http://localhost:3000/`.
+
+
+## API Usage
 
 ### Read
 

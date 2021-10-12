@@ -1,1 +1,0 @@
-web: java -Dserver.port=$PORT -Dserver.host=0.0.0.0 $JAVA_OPTS -jar target/bytebin.jar
