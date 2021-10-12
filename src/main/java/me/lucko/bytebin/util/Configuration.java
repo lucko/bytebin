@@ -25,6 +25,7 @@
 
 package me.lucko.bytebin.util;
 
+import com.google.common.base.Splitter;
 import com.google.common.collect.ImmutableMap;
 import com.google.gson.Gson;
 import com.google.gson.JsonElement;
@@ -35,7 +36,9 @@ import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.Locale;
 import java.util.Map;
+import java.util.function.Function;
 
 /**
  * Json config wrapper class
@@ -60,40 +63,83 @@ public class Configuration {
         this.jsonObject = jsonObject;
     }
 
-    public String getString(String path, String def) {
-        JsonElement e = this.jsonObject.get(path);
-        if (e == null || !e.isJsonPrimitive() || !e.getAsJsonPrimitive().isString()) {
-            return def;
+    private <T> T get(Option option, T def, Function<String, T> parser, Function<JsonElement, T> jsonParser) {
+        String value = System.getProperty(option.keySystemProperty);
+        if (value != null) {
+            return parser.apply(value);
         }
-        return e.getAsString();
+
+        value = System.getenv(option.keyEnvironmentVariable);
+        if (value != null) {
+            return parser.apply(value);
+        }
+
+        JsonElement e = this.jsonObject.get(option.keyJson);
+        if (e != null) {
+            return jsonParser.apply(e);
+        }
+
+        return def;
     }
 
-    public int getInt(String path, int def) {
-        JsonElement e = this.jsonObject.get(path);
-        if (e == null || !e.isJsonPrimitive() || !e.getAsJsonPrimitive().isNumber()) {
-            return def;
-        }
-        return e.getAsInt();
+    public String getString(Option option, String def) {
+        return get(option, def, Function.identity(), JsonElement::getAsString);
     }
 
-    public long getLong(String path, long def) {
-        JsonElement e = this.jsonObject.get(path);
-        if (e == null || !e.isJsonPrimitive() || !e.getAsJsonPrimitive().isNumber()) {
-            return def;
-        }
-        return e.getAsLong();
+    public int getInt(Option option, int def) {
+        return get(option, def, Integer::parseInt, JsonElement::getAsInt);
     }
 
-    public Map<String, Long> getLongMap(String path) {
-        JsonElement e = this.jsonObject.get(path);
-        if (e == null || !e.isJsonObject()) {
-            return ImmutableMap.of();
+    public long getLong(Option option, long def) {
+        return get(option, def, Long::parseLong, JsonElement::getAsLong);
+    }
+
+    public Map<String, Long> getLongMap(Option option) {
+        return get(option, ImmutableMap.of(),
+                str -> Splitter.on(',').withKeyValueSeparator('=').split(str).entrySet().stream()
+                        .collect(ImmutableMap.toImmutableMap(
+                                Map.Entry::getKey,
+                                ent -> Long.parseLong(ent.getValue())
+                        )),
+                ele -> ele.getAsJsonObject().entrySet().stream()
+                        .collect(ImmutableMap.toImmutableMap(
+                                Map.Entry::getKey,
+                                ent -> ent.getValue().getAsLong()
+                        ))
+        );
+    }
+
+    public enum Option {
+
+        HOST("host", "bytebin.http.host"),
+        PORT("port", "bytebin.http.port"),
+
+        KEY_LENGTH("keyLength", "bytebin.misc.keylength"),
+        EXECUTOR_POOL_SIZE("corePoolSize", "bytebin.misc.corepoolsize"),
+
+        MAX_CONTENT_LENGTH("maxContentLengthMb", "bytebin.content.maxsize"), // mb
+        MAX_CONTENT_LIFETIME("lifetimeMinutes", "bytebin.content.expiry"), // minutes
+        MAX_CONTENT_LIFETIME_USER_AGENTS("lifetimeMinutesByUserAgent", "bytebin.content.expiry.useragents"), // minutes
+
+        CACHE_EXPIRY("cacheExpiryMinutes", "bytebin.cache.expiry"), // minutes
+        CACHE_MAX_SIZE("cacheMaxSizeMb", "bytebin.cache.maxsize"), // mb
+
+        POST_RATE_LIMIT_PERIOD("postRateLimitPeriodMins", "bytebin.ratelimit.post.period"), // minutes
+        POST_RATE_LIMIT("postRateLimit", "bytebin.ratelimit.post.amount"),
+        UPDATE_RATE_LIMIT_PERIOD("updateRateLimitPeriodMins", "bytebin.ratelimit.update.period"), // minutes
+        UPDATE_RATE_LIMIT("updateRateLimit", "bytebin.ratelimit.update.amount"),
+        READ_RATE_LIMIT_PERIOD("readRateLimitPeriodMins", "bytebin.ratelimit.read.period"), // minutes
+        READ_RATE_LIMIT("readRateLimit", "bytebin.ratelimit.read.amount");
+
+        final String keyJson;
+        final String keySystemProperty;
+        final String keyEnvironmentVariable;
+
+        Option(String keyJson, String keySystemProperty) {
+            this.keyJson = keyJson;
+            this.keySystemProperty = keySystemProperty;
+            this.keyEnvironmentVariable = keySystemProperty.toUpperCase(Locale.ROOT).replace('.', '_');
         }
 
-        JsonObject map = e.getAsJsonObject();
-        return map.entrySet().stream().collect(ImmutableMap.toImmutableMap(
-                Map.Entry::getKey,
-                ent -> ent.getValue().getAsLong()
-        ));
     }
 }

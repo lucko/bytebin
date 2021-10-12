@@ -27,7 +27,6 @@ package me.lucko.bytebin;
 
 import com.google.common.collect.ImmutableMap;
 import com.google.common.io.ByteStreams;
-import com.google.common.io.CharStreams;
 import com.google.common.util.concurrent.ThreadFactoryBuilder;
 
 import me.lucko.bytebin.content.Content;
@@ -35,6 +34,7 @@ import me.lucko.bytebin.content.ContentCache;
 import me.lucko.bytebin.content.ContentStorageHandler;
 import me.lucko.bytebin.http.BytebinServer;
 import me.lucko.bytebin.util.Configuration;
+import me.lucko.bytebin.util.Configuration.Option;
 import me.lucko.bytebin.util.RateLimiter;
 import me.lucko.bytebin.util.TokenGenerator;
 
@@ -45,8 +45,6 @@ import org.apache.logging.log4j.io.IoBuilder;
 
 import java.io.IOException;
 import java.io.InputStream;
-import java.io.InputStreamReader;
-import java.nio.charset.StandardCharsets;
 import java.nio.file.Paths;
 import java.util.Map;
 import java.util.concurrent.Executors;
@@ -85,7 +83,7 @@ public final class Bytebin implements AutoCloseable {
 
         // setup executor
         this.executor = Executors.newScheduledThreadPool(
-                config.getInt("corePoolSize", 16),
+                config.getInt(Option.EXECUTOR_POOL_SIZE, 16),
                 new ThreadFactoryBuilder().setNameFormat("bytebin-io-%d").build()
         );
 
@@ -98,8 +96,8 @@ public final class Bytebin implements AutoCloseable {
         // build content cache
         ContentCache contentCache = new ContentCache(
                 contentStorageHandler,
-                config.getInt("cacheExpiryMinutes", 10),
-                config.getInt("cacheMaxSizeMb", 200)
+                config.getInt(Option.CACHE_EXPIRY, 10),
+                config.getInt(Option.CACHE_MAX_SIZE, 200)
         );
 
         byte[] indexPage = getResource("/index.html");
@@ -109,29 +107,29 @@ public final class Bytebin implements AutoCloseable {
         this.server = new BytebinServer(
                 contentStorageHandler,
                 contentCache,
-                System.getProperty("server.host", config.getString("host", "127.0.0.1")),
-                Integer.getInteger("server.port", config.getInt("port", 8080)),
+                config.getString(Option.HOST, "0.0.0.0"),
+                config.getInt(Option.PORT, 8080),
                 new RateLimiter(
                         // by default, allow posts at a rate of 3 times per min (every 20s)
-                        config.getInt("postRateLimitPeriodMins", 10),
-                        config.getInt("postRateLimit", 30)
+                        config.getInt(Option.POST_RATE_LIMIT_PERIOD, 10),
+                        config.getInt(Option.POST_RATE_LIMIT, 30)
                 ),
                 new RateLimiter(
                         // by default, allow updates at a rate of 15 times per min (every 4s)
-                        config.getInt("updateRateLimitPeriodMins", 2),
-                        config.getInt("updateRateLimit", 26)
+                        config.getInt(Option.UPDATE_RATE_LIMIT_PERIOD, 2),
+                        config.getInt(Option.UPDATE_RATE_LIMIT, 26)
                 ),
                 new RateLimiter(
                         // by default, allow reads at a rate of 15 times per min (every 4s)
-                        config.getInt("readRateLimitPeriodMins", 2),
-                        config.getInt("readRateLimit", 30)
+                        config.getInt(Option.READ_RATE_LIMIT_PERIOD, 2),
+                        config.getInt(Option.READ_RATE_LIMIT, 30)
                 ),
                 indexPage,
                 favicon,
-                new TokenGenerator(config.getInt("keyLength", 7)),
-                (Content.MEGABYTE_LENGTH * config.getInt("maxContentLengthMb", 10)),
-                TimeUnit.MINUTES.toMillis(config.getLong("lifetimeMinutes", TimeUnit.DAYS.toMinutes(1))),
-                config.getLongMap("lifetimeMinutesByUserAgent").entrySet().stream().collect(ImmutableMap.toImmutableMap(Map.Entry::getKey, e -> TimeUnit.MINUTES.toMillis(e.getValue())))
+                new TokenGenerator(config.getInt(Option.KEY_LENGTH, 7)),
+                (Content.MEGABYTE_LENGTH * config.getInt(Option.MAX_CONTENT_LENGTH, 10)),
+                TimeUnit.MINUTES.toMillis(config.getLong(Option.MAX_CONTENT_LIFETIME, TimeUnit.DAYS.toMinutes(1))),
+                config.getLongMap(Option.MAX_CONTENT_LIFETIME_USER_AGENTS).entrySet().stream().collect(ImmutableMap.toImmutableMap(Map.Entry::getKey, e -> TimeUnit.MINUTES.toMillis(e.getValue())))
         );
         this.server.start();
 
