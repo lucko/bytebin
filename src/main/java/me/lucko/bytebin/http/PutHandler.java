@@ -29,6 +29,7 @@ import me.lucko.bytebin.content.Content;
 import me.lucko.bytebin.content.ContentCache;
 import me.lucko.bytebin.content.ContentStorageHandler;
 import me.lucko.bytebin.util.ContentEncoding;
+import me.lucko.bytebin.util.ExpiryHandler;
 import me.lucko.bytebin.util.Gzip;
 import me.lucko.bytebin.util.RateLimiter;
 import me.lucko.bytebin.util.TokenGenerator;
@@ -38,6 +39,7 @@ import org.apache.logging.log4j.Logger;
 import org.rapidoid.http.Req;
 import org.rapidoid.http.ReqHandler;
 
+import java.time.Instant;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicReference;
 
@@ -54,15 +56,15 @@ public final class PutHandler implements ReqHandler {
     private final ContentStorageHandler contentStorageHandler;
     private final ContentCache contentCache;
     private final long maxContentLength;
-    private final long lifetimeMillis;
+    private final ExpiryHandler expiryHandler;
 
-    public PutHandler(BytebinServer server, RateLimiter rateLimiter, ContentStorageHandler contentStorageHandler, ContentCache contentCache, long maxContentLength, long lifetimeMillis) {
+    public PutHandler(BytebinServer server, RateLimiter rateLimiter, ContentStorageHandler contentStorageHandler, ContentCache contentCache, long maxContentLength, ExpiryHandler expiryHandler) {
         this.server = server;
         this.rateLimiter = rateLimiter;
         this.contentStorageHandler = contentStorageHandler;
         this.contentCache = contentCache;
         this.maxContentLength = maxContentLength;
-        this.lifetimeMillis = lifetimeMillis;
+        this.expiryHandler = expiryHandler;
     }
 
     @Override
@@ -117,16 +119,19 @@ public final class PutHandler implements ReqHandler {
                 return;
             }
 
-            long newExpiry = System.currentTimeMillis() + this.lifetimeMillis;
+            // get the user agent & origin headers
+            String userAgent = req.header("User-Agent", "null");
+            String origin = req.header("Origin", "null");
 
-            String origin = req.header("Origin", null);
+            Instant newExpiry = this.expiryHandler.getExpiry(userAgent, origin);
+
             LOGGER.info("[PUT]\n" +
                     "    key = " + path + "\n" +
                     "    new type = " + new String(newContentType.getBytes()) + "\n" +
                     "    new encoding = " + newEncodings.toString() + "\n" +
                     "    user agent = " + req.header("User-Agent", "null") + "\n" +
                     "    ip = " + ipAddress + "\n" +
-                    (origin == null ? "" : "    origin = " + origin + "\n") +
+                    (origin.equals("null") ? "" : "    origin = " + origin + "\n") +
                     "    old content size = " + String.format("%,d", oldContent.getContent().length / 1024) + " KB" + "\n" +
                     "    new content size = " + String.format("%,d", newContent.get().length / 1024) + " KB" + "\n"
             );

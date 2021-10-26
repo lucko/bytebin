@@ -25,6 +25,8 @@
 
 package me.lucko.bytebin.content;
 
+import java.time.Instant;
+
 /**
  * Encapsulates content within the service
  */
@@ -34,21 +36,21 @@ public final class Content {
     public static final byte[] EMPTY_BYTES = new byte[0];
 
     /** Empty content instance */
-    public static final Content EMPTY_CONTENT = new Content(null, "text/plain", Long.MAX_VALUE, Long.MIN_VALUE, false, null, "", EMPTY_BYTES);
+    public static final Content EMPTY_CONTENT = new Content(null, "text/plain", Instant.MAX, Long.MIN_VALUE, false, null, "", EMPTY_BYTES);
 
     /** Number of bytes in a megabyte */
     public static final long MEGABYTE_LENGTH = 1024L * 1024L;
 
     private final String key;
     private String contentType;
-    private long expiry;
+    private Instant expiry;
     private long lastModified;
     private final boolean modifiable;
     private final String authKey;
     private String encoding;
     private byte[] content;
 
-    public Content(String key, String contentType, long expiry, long lastModified, boolean modifiable, String authKey, String encoding, byte[] content) {
+    public Content(String key, String contentType, Instant expiry, long lastModified, boolean modifiable, String authKey, String encoding, byte[] content) {
         this.key = key;
         this.contentType = contentType;
         this.expiry = expiry;
@@ -71,11 +73,11 @@ public final class Content {
         this.contentType = contentType;
     }
 
-    public long getExpiry() {
+    public Instant getExpiry() {
         return this.expiry;
     }
 
-    public void setExpiry(long expiry) {
+    public void setExpiry(Instant expiry) {
         this.expiry = expiry;
     }
 
@@ -96,7 +98,7 @@ public final class Content {
     }
 
     public String getEncoding() {
-        return encoding;
+        return this.encoding;
     }
 
     public void setEncoding(String encoding) {
@@ -112,6 +114,9 @@ public final class Content {
     }
 
     public boolean shouldExpire() {
-        return this.getExpiry() < System.currentTimeMillis();
+        if (this.expiry == Instant.MAX) {
+            return false;
+        }
+        return this.expiry.isBefore(Instant.now());
     }
 }

@@ -29,6 +29,7 @@ import me.lucko.bytebin.content.Content;
 import me.lucko.bytebin.content.ContentCache;
 import me.lucko.bytebin.content.ContentStorageHandler;
 import me.lucko.bytebin.util.ContentEncoding;
+import me.lucko.bytebin.util.ExpiryHandler;
 import me.lucko.bytebin.util.RateLimiter;
 import me.lucko.bytebin.util.TokenGenerator;
 
@@ -39,6 +40,7 @@ import org.rapidoid.http.ReqHandler;
 import org.rapidoid.http.Resp;
 import org.rapidoid.u.U;
 
+import java.time.Instant;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
@@ -59,12 +61,9 @@ public final class PostHandler implements ReqHandler {
     private final TokenGenerator contentTokenGenerator;
     private final TokenGenerator authKeyTokenGenerator;
     private final long maxContentLength;
-    private final long lifetimeMillis;
-    private final Map<String, Long> lifetimeMillisByUserAgent;
+    private final ExpiryHandler expiryHandler;
 
-    private static final Pattern RE_SPACE = Pattern.compile("\\s+");
-
-    public PostHandler(BytebinServer server, RateLimiter rateLimiter, ContentStorageHandler contentStorageHandler, ContentCache contentCache, TokenGenerator contentTokenGenerator, long maxContentLength, long lifetimeMillis, Map<String, Long> lifetimeMillisByUserAgent) {
+    public PostHandler(BytebinServer server, RateLimiter rateLimiter, ContentStorageHandler contentStorageHandler, ContentCache contentCache, TokenGenerator contentTokenGenerator, long maxContentLength, ExpiryHandler expiryHandler) {
         this.server = server;
         this.rateLimiter = rateLimiter;
         this.contentStorageHandler = contentStorageHandler;
@@ -72,8 +71,7 @@ public final class PostHandler implements ReqHandler {
         this.contentTokenGenerator = contentTokenGenerator;
         this.authKeyTokenGenerator = new TokenGenerator(32);
         this.maxContentLength = maxContentLength;
-        this.lifetimeMillis = lifetimeMillis;
-        this.lifetimeMillisByUserAgent = lifetimeMillisByUserAgent;
+        this.expiryHandler = expiryHandler;
     }
 
     @Override
@@ -101,7 +99,7 @@ public final class PostHandler implements ReqHandler {
         String userAgent = req.header("User-Agent", "null");
         String origin = req.header("Origin", "null");
 
-        long expiry = System.currentTimeMillis() + this.lifetimeMillisByUserAgent.getOrDefault(userAgent, this.lifetimeMillisByUserAgent.getOrDefault(origin, this.lifetimeMillis));
+        Instant expiry = this.expiryHandler.getExpiry(userAgent, origin);
 
         // check max content length
         if (content.length > this.maxContentLength) return cors(req.response()).code(413).plain("Content too large");

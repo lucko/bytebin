@@ -41,6 +41,7 @@ import java.io.EOFException;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.time.Instant;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.stream.Stream;
@@ -79,14 +80,14 @@ public class ContentStorageHandler implements CacheLoader<String, Content> {
         // resolve the path within the content dir
         try {
             Path resolved = this.contentPath.resolve(path);
-            return load(resolved);
+            return load(resolved, false);
         } catch (Exception e) {
             LOGGER.error("Exception occurred loading '" + path + "'", e);
             throw e; // rethrow
         }
     }
 
-    private Content load(Path resolved) throws IOException {
+    private Content load(Path resolved, boolean skipContent) throws IOException {
         if (!Files.exists(resolved)) {
             return Content.EMPTY_CONTENT;
         }
@@ -105,6 +106,7 @@ public class ContentStorageHandler implements CacheLoader<String, Content> {
 
             // read expiry
             long expiry = in.readLong();
+            Instant expiryInstant = expiry == -1 ? Instant.MAX : Instant.ofEpochMilli(expiry);
 
             // read last modified time
             long lastModified = in.readLong();
@@ -127,58 +129,23 @@ public class ContentStorageHandler implements CacheLoader<String, Content> {
             }
 
             // read content
-            byte[] content = new byte[in.readInt()];
-            in.readFully(content);
+            byte[] content;
+            if (skipContent) {
+                content = Content.EMPTY_BYTES;
+            } else {
+                content = new byte[in.readInt()];
+                in.readFully(content);
+            }
 
-            return new Content(key, contentType, expiry, lastModified, modifiable, authKey, encoding, content);
+            return new Content(key, contentType, expiryInstant, lastModified, modifiable, authKey, encoding, content);
         }
     }
 
     public Content loadMeta(Path resolved) throws IOException {
-        if (!Files.exists(resolved)) {
-            return Content.EMPTY_CONTENT;
-        }
-
-        try (DataInputStream in = new DataInputStream(new BufferedInputStream(Files.newInputStream(resolved)))) {
-            // read version
-            int version = in.readInt();
-
-            // read key
-            String key = in.readUTF();
-
-            // read content type
-            byte[] contentTypeBytes = new byte[in.readInt()];
-            in.readFully(contentTypeBytes);
-            String contentType = new String(contentTypeBytes);
-
-            // read expiry
-            long expiry = in.readLong();
-
-            // read last modified time
-            long lastModified = in.readLong();
-
-            // read modifiable state data
-            boolean modifiable = in.readBoolean();
-            String authKey = null;
-            if (modifiable) {
-                authKey = in.readUTF();
-            }
-
-            // read encoding
-            String encoding;
-            if (version == 1) {
-                encoding = ContentEncoding.GZIP;
-            } else {
-                byte[] encodingBytes = new byte[in.readInt()];
-                in.readFully(encodingBytes);
-                encoding = new String(encodingBytes);
-            }
-
-            return new Content(key, contentType, expiry, lastModified, modifiable, authKey, encoding, Content.EMPTY_BYTES);
-        }
+        return load(resolved, true);
     }
 
-    public void save(String key, String contentType, byte[] content, long expiry, String authKey, boolean requiresCompression, String encoding, CompletableFuture<Content> future) {
+    public void save(String key, String contentType, byte[] content, Instant expiry, String authKey, boolean requiresCompression, String encoding, CompletableFuture<Content> future) {
         if (requiresCompression) {
             content = Gzip.compress(content);
         }
@@ -208,7 +175,7 @@ public class ContentStorageHandler implements CacheLoader<String, Content> {
             out.write(contextType);
 
             // write expiry time
-            out.writeLong(c.getExpiry());
+            out.writeLong(c.getExpiry() == Instant.MAX ? -1 : c.getExpiry().toEpochMilli());
 
             // write last modified
             out.writeLong(c.getLastModified());

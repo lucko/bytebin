@@ -35,6 +35,7 @@ import me.lucko.bytebin.content.ContentStorageHandler;
 import me.lucko.bytebin.http.BytebinServer;
 import me.lucko.bytebin.util.Configuration;
 import me.lucko.bytebin.util.Configuration.Option;
+import me.lucko.bytebin.util.ExpiryHandler;
 import me.lucko.bytebin.util.RateLimiter;
 import me.lucko.bytebin.util.TokenGenerator;
 
@@ -46,6 +47,7 @@ import org.apache.logging.log4j.io.IoBuilder;
 import java.io.IOException;
 import java.io.InputStream;
 import java.nio.file.Paths;
+import java.time.Duration;
 import java.util.Map;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
@@ -103,6 +105,11 @@ public final class Bytebin implements AutoCloseable {
         byte[] indexPage = getResource("/index.html");
         byte[] favicon = getResource("/favicon.ico");
 
+        ExpiryHandler expiryHandler = new ExpiryHandler(
+                config.getLong(Option.MAX_CONTENT_LIFETIME, -1), // never expire by default
+                config.getLongMap(Option.MAX_CONTENT_LIFETIME_USER_AGENTS)
+        );
+
         // setup the web server
         this.server = new BytebinServer(
                 contentStorageHandler,
@@ -110,17 +117,17 @@ public final class Bytebin implements AutoCloseable {
                 config.getString(Option.HOST, "0.0.0.0"),
                 config.getInt(Option.PORT, 8080),
                 new RateLimiter(
-                        // by default, allow posts at a rate of 3 times per min (every 20s)
+                        // by default, allow posts at a rate of 30 times every 10 minutes (every 20s)
                         config.getInt(Option.POST_RATE_LIMIT_PERIOD, 10),
                         config.getInt(Option.POST_RATE_LIMIT, 30)
                 ),
                 new RateLimiter(
-                        // by default, allow updates at a rate of 15 times per min (every 4s)
+                        // by default, allow updates at a rate of 20 times every 2 minutes (every 6s)
                         config.getInt(Option.UPDATE_RATE_LIMIT_PERIOD, 2),
-                        config.getInt(Option.UPDATE_RATE_LIMIT, 26)
+                        config.getInt(Option.UPDATE_RATE_LIMIT, 20)
                 ),
                 new RateLimiter(
-                        // by default, allow reads at a rate of 15 times per min (every 4s)
+                        // by default, allow reads at a rate of 30 times every 2 minutes (every 4s)
                         config.getInt(Option.READ_RATE_LIMIT_PERIOD, 2),
                         config.getInt(Option.READ_RATE_LIMIT, 30)
                 ),
@@ -128,13 +135,14 @@ public final class Bytebin implements AutoCloseable {
                 favicon,
                 new TokenGenerator(config.getInt(Option.KEY_LENGTH, 7)),
                 (Content.MEGABYTE_LENGTH * config.getInt(Option.MAX_CONTENT_LENGTH, 10)),
-                TimeUnit.MINUTES.toMillis(config.getLong(Option.MAX_CONTENT_LIFETIME, TimeUnit.DAYS.toMinutes(1))),
-                config.getLongMap(Option.MAX_CONTENT_LIFETIME_USER_AGENTS).entrySet().stream().collect(ImmutableMap.toImmutableMap(Map.Entry::getKey, e -> TimeUnit.MINUTES.toMillis(e.getValue())))
+                expiryHandler
         );
         this.server.start();
 
         // schedule invalidation task
-        this.executor.scheduleWithFixedDelay(contentStorageHandler::runInvalidation, 1, contentCache.getCacheTimeMins(), TimeUnit.MINUTES);
+        if (expiryHandler.hasExpiryTimes()) {
+            this.executor.scheduleWithFixedDelay(contentStorageHandler::runInvalidation, 1, contentCache.getCacheTimeMins(), TimeUnit.MINUTES);
+        }
     }
 
     @Override

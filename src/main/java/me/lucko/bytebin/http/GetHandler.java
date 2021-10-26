@@ -39,6 +39,7 @@ import org.rapidoid.http.ReqHandler;
 import org.rapidoid.http.Resp;
 
 import java.io.IOException;
+import java.time.Duration;
 import java.time.Instant;
 import java.time.ZoneOffset;
 import java.time.format.DateTimeFormatter;
@@ -98,11 +99,11 @@ public final class GetHandler implements ReqHandler {
 
             Resp resp = cors(req.response()).code(200).header("Last-Modified", lastModifiedTime);
 
-            long expires = content.getExpiry() - System.currentTimeMillis();
+            long expires = Duration.between(Instant.now(), content.getExpiry()).getSeconds();
             if (content.isModifiable() || expires <= 0L) {
                 resp.header("Cache-Control", "no-cache");
             } else {
-                resp.header("Cache-Control", "public, max-age=" + (expires / 1000L));
+                resp.header("Cache-Control", "public, max-age=" + expires);
             }
 
             List<String> contentEncodingStrings = ContentEncoding.getContentEncoding(content.getEncoding());
