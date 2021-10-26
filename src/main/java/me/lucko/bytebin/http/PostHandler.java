@@ -35,20 +35,20 @@ import me.lucko.bytebin.util.TokenGenerator;
 
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
-import org.rapidoid.http.Req;
-import org.rapidoid.http.ReqHandler;
-import org.rapidoid.http.Resp;
-import org.rapidoid.u.U;
+
+import io.jooby.Context;
+import io.jooby.MediaType;
+import io.jooby.Route;
+import io.jooby.StatusCode;
+import io.jooby.exception.StatusCodeException;
 
 import java.time.Instant;
 import java.util.List;
-import java.util.Map;
 import java.util.concurrent.CompletableFuture;
-import java.util.regex.Pattern;
 
-import static me.lucko.bytebin.http.BytebinServer.cors;
+import javax.annotation.Nonnull;
 
-public final class PostHandler implements ReqHandler {
+public final class PostHandler implements Route.Handler {
 
     /** Logger instance */
     private static final Logger LOGGER = LogManager.getLogger(PostHandler.class);
@@ -75,37 +75,43 @@ public final class PostHandler implements ReqHandler {
     }
 
     @Override
-    public Object execute(Req req) {
-        byte[] content = req.body();
+    public String apply(@Nonnull Context ctx) {
+        byte[] content = ctx.body().bytes();
 
-        String ipAddress = BytebinServer.getIpAddress(req);
+        String ipAddress = BytebinServer.getIpAddress(ctx);
 
         // ensure something was actually posted
-        if (content == null || content.length == 0) return cors(req.response()).code(400).plain("Missing content");
+        if (content == null || content.length == 0) {
+            throw new StatusCodeException(StatusCode.BAD_REQUEST, "Missing content");
+        }
         // check rate limits
-        if (this.rateLimiter.check(ipAddress)) return cors(req.response()).code(429).plain("Rate limit exceeded");
+        if (this.rateLimiter.check(ipAddress)) {
+            throw new StatusCodeException(StatusCode.TOO_MANY_REQUESTS, "Rate limit exceeded");
+        }
 
         // determine the content type
-        String contentType = req.header("Content-Type", "text/plain");
+        String contentType = ctx.header("Content-Type").value("text/plain");
 
         // generate a key
         String key = this.contentTokenGenerator.generate();
 
         // get the content encodings
         // https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/Content-Encoding
-        List<String> encodings = ContentEncoding.getContentEncoding(req.header("Content-Encoding", ""));
+        List<String> encodings = ContentEncoding.getContentEncoding(ctx.header("Content-Encoding").valueOrNull());
 
         // get the user agent & origin headers
-        String userAgent = req.header("User-Agent", "null");
-        String origin = req.header("Origin", "null");
+        String userAgent = ctx.header("User-Agent").value("null");
+        String origin = ctx.header("Origin").value("null");
 
         Instant expiry = this.expiryHandler.getExpiry(userAgent, origin);
 
         // check max content length
-        if (content.length > this.maxContentLength) return cors(req.response()).code(413).plain("Content too large");
+        if (content.length > this.maxContentLength) {
+            throw new StatusCodeException(StatusCode.REQUEST_ENTITY_TOO_LARGE, "Content too large");
+        }
 
         // check for our custom Allow-Modification header
-        boolean allowModifications = Boolean.parseBoolean(req.header("Allow-Modification", "false"));
+        boolean allowModifications = ctx.header("Allow-Modification").booleanValue(false);
         String authKey;
         if (allowModifications) {
             authKey = this.authKeyTokenGenerator.generate();
@@ -137,13 +143,15 @@ public final class PostHandler implements ReqHandler {
         this.contentStorageHandler.getExecutor().execute(() -> this.contentStorageHandler.save(key, contentType, content, expiry, authKey, compressServerSide, encoding, future));
 
         // return the url location as plain content
-        Resp resp = cors(req.response()).code(201).header("Location", key);
+        ctx.setResponseCode(StatusCode.CREATED);
+        ctx.setResponseHeader("Location", key);
 
         if (allowModifications) {
-            resp.header("Modification-Key", authKey);
+            ctx.setResponseHeader("Modification-Key", authKey);
         }
 
-        return resp.json(U.map("key", key));
+        ctx.setResponseType(MediaType.JSON);
+        return "{\"key\":\"" + key + "\"}";
     }
 
 }

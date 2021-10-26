@@ -25,7 +25,7 @@
 
 package me.lucko.bytebin.http;
 
-import me.lucko.bytebin.content.Content;
+import me.lucko.bytebin.Bytebin;
 import me.lucko.bytebin.content.ContentCache;
 import me.lucko.bytebin.content.ContentStorageHandler;
 import me.lucko.bytebin.util.ExpiryHandler;
@@ -34,65 +34,91 @@ import me.lucko.bytebin.util.TokenGenerator;
 
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
-import org.rapidoid.http.MediaType;
-import org.rapidoid.http.Req;
-import org.rapidoid.http.Resp;
-import org.rapidoid.setup.Setup;
 
-public class BytebinServer {
+import io.jooby.AssetHandler;
+import io.jooby.AssetSource;
+import io.jooby.Context;
+import io.jooby.Cors;
+import io.jooby.CorsHandler;
+import io.jooby.ExecutionMode;
+import io.jooby.Jooby;
+import io.jooby.ServerOptions;
+import io.jooby.StatusCode;
+import io.jooby.exception.StatusCodeException;
+
+import java.time.Duration;
+import java.util.concurrent.CompletionException;
+
+public class BytebinServer extends Jooby {
 
     /** Logger instance */
     private static final Logger LOGGER = LogManager.getLogger(BytebinServer.class);
 
-    private final Setup server;
+    public BytebinServer(ContentStorageHandler contentStorageHandler, ContentCache contentCache, String host, int port, RateLimiter postRateLimiter, RateLimiter putRateLimiter, RateLimiter readRateLimiter, TokenGenerator contentTokenGenerator, long maxContentLength, ExpiryHandler expiryHandler) {
+        ServerOptions serverOpts = new ServerOptions();
+        serverOpts.setHost(host);
+        serverOpts.setPort(port);
+        serverOpts.setCompressionLevel(null);
+        serverOpts.setMaxRequestSize((int) maxContentLength);
+        setServerOptions(serverOpts);
 
-    public BytebinServer(ContentStorageHandler contentStorageHandler, ContentCache contentCache, String host, int port, RateLimiter postRateLimiter, RateLimiter putRateLimiter, RateLimiter readRateLimiter, byte[] indexPage, byte[] favicon, TokenGenerator contentTokenGenerator, long maxContentLength, ExpiryHandler expiryHandler) {
-        this.server = Setup.create("bytebin");
-        this.server.address(host).port(port);
+        setExecutionMode(ExecutionMode.EVENT_LOOP);
+        setTrustProxy(true);
 
         // catch all errors & just return some generic error message
-        this.server.custom().errorHandler((req, resp, error) -> {
-            LOGGER.error("Error thrown by handler", error);
-            return cors(resp).code(404).plain("Invalid path");
+        error((ctx, cause, code) -> {
+            Throwable rootCause = cause;
+            while (rootCause instanceof CompletionException && rootCause.getCause() != null) {
+                rootCause = rootCause.getCause();
+            }
+
+            if (rootCause instanceof StatusCodeException) {
+                // handle expected errors
+                ctx.setResponseCode(((StatusCodeException) rootCause).getStatusCode())
+                        .setResponseType(io.jooby.MediaType.TEXT)
+                        .send(rootCause.getMessage());
+            } else {
+                // handle unexpected errors: log stack trace and send a generic response
+                LOGGER.error("Error thrown by handler", cause);
+                ctx.setResponseCode(StatusCode.NOT_FOUND)
+                        .setResponseType(io.jooby.MediaType.TEXT)
+                        .send("Invalid path");
+            }
         });
 
+        AssetSource wwwFiles = AssetSource.create(Bytebin.class.getClassLoader(), "/www/");
+        AssetSource fourOhFour = path -> { throw new StatusCodeException(StatusCode.NOT_FOUND, "Not found"); };
+
+        // serve index page or favicon, otherwise 404
+        assets("/*", new AssetHandler(wwwFiles, fourOhFour).setMaxAge(Duration.ofDays(1)));
+
         // define route handlers
-        defineOptionsRoute(this.server, "/post", "POST", "Content-Type, Content-Encoding, Allow-Modification");
-        defineOptionsRoute(this.server, "/*", "GET, PUT", "Content-Type, Content-Encoding, Modification-Key");
-        this.server.page("/").html(indexPage);
-        this.server.get("/favicon.ico").serve(req -> cors(req.response()).code(200).contentType(MediaType.IMAGE_X_ICON).body(favicon));
-        this.server.post("/post").managed(false).serve(new PostHandler(this, postRateLimiter, contentStorageHandler, contentCache, contentTokenGenerator, maxContentLength, expiryHandler));
-        this.server.get("/*").managed(false).cacheCapacity(0).serve(new GetHandler(this, readRateLimiter, contentCache));
-        this.server.put("/*").managed(false).cacheCapacity(0).serve(new PutHandler(this, putRateLimiter, contentStorageHandler, contentCache, maxContentLength, expiryHandler));
+        routes(() -> {
+            decorator(new CorsHandler(new Cors()
+                    .setUseCredentials(false)
+                    .setMaxAge(Duration.ofDays(1))
+                    .setMethods("POST")
+                    .setHeaders("Content-Type", "Accept", "Origin", "Content-Encoding", "Allow-Modification")));
+
+            post("/post", new PostHandler(this, postRateLimiter, contentStorageHandler, contentCache, contentTokenGenerator, maxContentLength, expiryHandler));
+            put("/{id:[a-zA-Z0-9]+}", new PutHandler(this, putRateLimiter, contentStorageHandler, contentCache, maxContentLength, expiryHandler));
+        });
+
+        routes(() -> {
+            decorator(new CorsHandler(new Cors()
+                    .setUseCredentials(false)
+                    .setMaxAge(Duration.ofDays(1))
+                    .setMethods("GET", "PUT")
+                    .setHeaders("Content-Type", "Accept", "Origin", "Content-Encoding", "Modification-Key")));
+
+            get("/{id:[a-zA-Z0-9]+}", new GetHandler(this, readRateLimiter, contentCache));
+        });
     }
 
-    public void start() {
-        this.server.activate();
-    }
-
-    public void halt() {
-        this.server.halt();
-    }
-
-    private static void defineOptionsRoute(Setup setup, String path, String allowedMethod, String allowedHeaders) {
-        setup.options(path).serve(req -> cors(req.response())
-                .header("Access-Control-Allow-Methods", allowedMethod)
-                .header("Access-Control-Max-Age", "86400")
-                .header("Access-Control-Allow-Headers", allowedHeaders)
-                .code(200)
-                .body(Content.EMPTY_BYTES)
-        );
-    }
-
-    /** Standard response function. (always add the CORS header)*/
-    static Resp cors(Resp resp) {
-        return resp.header("Access-Control-Allow-Origin", "*");
-    }
-
-    static String getIpAddress(Req req) {
-        String ipAddress = req.header("x-real-ip", null);
+    static String getIpAddress(Context ctx) {
+        String ipAddress = ctx.header("x-real-ip").valueOrNull();
         if (ipAddress == null) {
-            ipAddress = req.clientIpAddress();
+            ipAddress = ctx.getRemoteAddress();
         }
         return ipAddress;
     }

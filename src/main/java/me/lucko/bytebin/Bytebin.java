@@ -25,8 +25,6 @@
 
 package me.lucko.bytebin;
 
-import com.google.common.collect.ImmutableMap;
-import com.google.common.io.ByteStreams;
 import com.google.common.util.concurrent.ThreadFactoryBuilder;
 
 import me.lucko.bytebin.content.Content;
@@ -44,11 +42,10 @@ import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.apache.logging.log4j.io.IoBuilder;
 
-import java.io.IOException;
-import java.io.InputStream;
+import io.jooby.ExecutionMode;
+import io.jooby.Jooby;
+
 import java.nio.file.Paths;
-import java.time.Duration;
-import java.util.Map;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
@@ -102,16 +99,13 @@ public final class Bytebin implements AutoCloseable {
                 config.getInt(Option.CACHE_MAX_SIZE, 200)
         );
 
-        byte[] indexPage = getResource("/index.html");
-        byte[] favicon = getResource("/favicon.ico");
-
         ExpiryHandler expiryHandler = new ExpiryHandler(
                 config.getLong(Option.MAX_CONTENT_LIFETIME, -1), // never expire by default
                 config.getLongMap(Option.MAX_CONTENT_LIFETIME_USER_AGENTS)
         );
 
         // setup the web server
-        this.server = new BytebinServer(
+        this.server = (BytebinServer) Jooby.createApp(new String[0], ExecutionMode.EVENT_LOOP, () -> new BytebinServer(
                 contentStorageHandler,
                 contentCache,
                 config.getString(Option.HOST, "0.0.0.0"),
@@ -131,12 +125,10 @@ public final class Bytebin implements AutoCloseable {
                         config.getInt(Option.READ_RATE_LIMIT_PERIOD, 2),
                         config.getInt(Option.READ_RATE_LIMIT, 30)
                 ),
-                indexPage,
-                favicon,
                 new TokenGenerator(config.getInt(Option.KEY_LENGTH, 7)),
                 (Content.MEGABYTE_LENGTH * config.getInt(Option.MAX_CONTENT_LENGTH, 10)),
                 expiryHandler
-        );
+        ));
         this.server.start();
 
         // schedule invalidation task
@@ -147,20 +139,12 @@ public final class Bytebin implements AutoCloseable {
 
     @Override
     public void close() {
-        this.server.halt();
+        this.server.stop();
         this.executor.shutdown();
         try {
             this.executor.awaitTermination(30, TimeUnit.SECONDS);
         } catch (InterruptedException e) {
             LOGGER.error("Exception whilst shutting down executor", e);
-        }
-    }
-
-    private static byte[] getResource(String name) {
-        try (InputStream in = Bytebin.class.getResourceAsStream(name)) {
-            return ByteStreams.toByteArray(in);
-        } catch (IOException e) {
-            throw new RuntimeException(e);
         }
     }
 

@@ -36,16 +36,20 @@ import me.lucko.bytebin.util.TokenGenerator;
 
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
-import org.rapidoid.http.Req;
-import org.rapidoid.http.ReqHandler;
+
+import io.jooby.Context;
+import io.jooby.Route;
+import io.jooby.StatusCode;
+import io.jooby.exception.StatusCodeException;
 
 import java.time.Instant;
 import java.util.List;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.atomic.AtomicReference;
 
-import static me.lucko.bytebin.http.BytebinServer.cors;
+import javax.annotation.Nonnull;
 
-public final class PutHandler implements ReqHandler {
+public final class PutHandler implements Route.Handler {
 
     /** Logger instance */
     private static final Logger LOGGER = LogManager.getLogger(PutHandler.class);
@@ -68,44 +72,48 @@ public final class PutHandler implements ReqHandler {
     }
 
     @Override
-    public Object execute(Req req) {
-        // get the path
-        String path = req.path().substring(1);
+    public CompletableFuture<Void> apply(@Nonnull Context ctx) {
+        // get the requested path
+        String path = ctx.path("id").value();
         if (path.trim().isEmpty() || path.contains(".") || TokenGenerator.INVALID_TOKEN_PATTERN.matcher(path).find()) {
-            return cors(req.response()).code(404).plain("Invalid path");
+            throw new StatusCodeException(StatusCode.NOT_FOUND, "Invalid path");
         }
 
-        AtomicReference<byte[]> newContent = new AtomicReference<>(req.body());
+        AtomicReference<byte[]> newContent = new AtomicReference<>(ctx.body().bytes());
 
-        String ipAddress = BytebinServer.getIpAddress(req);
+        String ipAddress = BytebinServer.getIpAddress(ctx);
 
         // ensure something was actually posted
-        if (newContent.get().length == 0) return cors(req.response()).code(400).plain("Missing content");
+        if (newContent.get().length == 0) {
+            throw new StatusCodeException(StatusCode.BAD_REQUEST, "Missing content");
+        }
         // check rate limits
-        if (this.rateLimiter.check(ipAddress)) return cors(req.response()).code(429).plain("Rate limit exceeded");
+        if (this.rateLimiter.check(ipAddress)) {
+            throw new StatusCodeException(StatusCode.TOO_MANY_REQUESTS, "Rate limit exceeded");
+        }
 
-        String authKey = req.header("Modification-Key", null);
-        if (authKey == null) return cors(req.response()).code(403).plain("Modification-Key header not present");
+        String authKey = ctx.header("Modification-Key").valueOrNull();
+        if (authKey == null) {
+            throw new StatusCodeException(StatusCode.FORBIDDEN, "Modification-Key header not present");
+        }
 
-        this.contentCache.get(path).whenCompleteAsync((oldContent, throwable) -> {
+        return this.contentCache.get(path).handleAsync((oldContent, throwable) -> {
             if (throwable != null || oldContent == null || oldContent.getKey() == null || oldContent.getContent().length == 0) {
                 // use a generic response to prevent use of this endpoint to search for valid content
-                cors(req.response()).plain("Incorrect modification key").done();
-                return;
+                throw new StatusCodeException(StatusCode.FORBIDDEN, "Incorrect modification key");
             }
 
             // ok so the old content does exist, check that it is modifiable & that the key matches
             if (!oldContent.isModifiable() || !oldContent.getAuthKey().equals(authKey)) {
                 // use a generic response to prevent use of this endpoint to search for valid content
-                cors(req.response()).code(403).plain("Incorrect modification key").done();
-                return;
+                throw new StatusCodeException(StatusCode.FORBIDDEN, "Incorrect modification key");
             }
 
             // determine the new content type
-            String newContentType = req.header("Content-Type", oldContent.getContentType());
+            String newContentType = ctx.header("Content-Type").value(oldContent.getContentType());
 
             // determine new encoding
-            List<String> newEncodings = ContentEncoding.getContentEncoding(req.header("Content-Encoding", ""));
+            List<String> newEncodings = ContentEncoding.getContentEncoding(ctx.header("Content-Encoding").valueOrNull());
 
             // compress if necessary
             if (newEncodings.isEmpty()) {
@@ -115,13 +123,12 @@ public final class PutHandler implements ReqHandler {
 
             // check max content length
             if (newContent.get().length > this.maxContentLength) {
-                cors(req.response()).code(413).plain("Content too large").done();
-                return;
+                throw new StatusCodeException(StatusCode.REQUEST_ENTITY_TOO_LARGE, "Content too large");
             }
 
             // get the user agent & origin headers
-            String userAgent = req.header("User-Agent", "null");
-            String origin = req.header("Origin", "null");
+            String userAgent = ctx.header("User-Agent").value("null");
+            String origin = ctx.header("Origin").value("null");
 
             Instant newExpiry = this.expiryHandler.getExpiry(userAgent, origin);
 
@@ -129,7 +136,7 @@ public final class PutHandler implements ReqHandler {
                     "    key = " + path + "\n" +
                     "    new type = " + new String(newContentType.getBytes()) + "\n" +
                     "    new encoding = " + newEncodings.toString() + "\n" +
-                    "    user agent = " + req.header("User-Agent", "null") + "\n" +
+                    "    user agent = " + userAgent + "\n" +
                     "    ip = " + ipAddress + "\n" +
                     (origin.equals("null") ? "" : "    origin = " + origin + "\n") +
                     "    old content size = " + String.format("%,d", oldContent.getContent().length / 1024) + " KB" + "\n" +
@@ -144,16 +151,14 @@ public final class PutHandler implements ReqHandler {
             oldContent.setContent(newContent.get());
 
             // make the http response
-            cors(req.response()).code(200)
-                    .body(Content.EMPTY_BYTES)
-                    .done();
+            ctx.setResponseCode(StatusCode.OK);
+            ctx.send(Content.EMPTY_BYTES);
 
             // save to disk
             this.contentStorageHandler.save(oldContent);
-        }, this.contentStorageHandler.getExecutor());
 
-        // mark that we're going to respond later
-        return req.async();
+            return null;
+        }, this.contentStorageHandler.getExecutor());
     }
 
 }

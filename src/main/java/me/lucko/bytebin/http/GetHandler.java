@@ -33,22 +33,22 @@ import me.lucko.bytebin.util.TokenGenerator;
 
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
-import org.rapidoid.http.MediaType;
-import org.rapidoid.http.Req;
-import org.rapidoid.http.ReqHandler;
-import org.rapidoid.http.Resp;
+
+import io.jooby.Context;
+import io.jooby.Route;
+import io.jooby.StatusCode;
+import io.jooby.exception.StatusCodeException;
 
 import java.io.IOException;
 import java.time.Duration;
 import java.time.Instant;
-import java.time.ZoneOffset;
-import java.time.format.DateTimeFormatter;
 import java.util.List;
 import java.util.Set;
+import java.util.concurrent.CompletableFuture;
 
-import static me.lucko.bytebin.http.BytebinServer.cors;
+import javax.annotation.Nonnull;
 
-public final class GetHandler implements ReqHandler {
+public final class GetHandler implements Route.Handler {
 
     /** Logger instance */
     private static final Logger LOGGER = LogManager.getLogger(GetHandler.class);
@@ -64,57 +64,54 @@ public final class GetHandler implements ReqHandler {
     }
 
     @Override
-    public Object execute(Req req) {
+    public CompletableFuture<byte[]> apply(@Nonnull Context ctx) {
         // get the requested path
-        String path = req.path().substring(1);
+        String path = ctx.path("id").value();
         if (path.trim().isEmpty() || path.contains(".") || TokenGenerator.INVALID_TOKEN_PATTERN.matcher(path).find()) {
-            return cors(req.response()).code(404).plain("Invalid path");
+            throw new StatusCodeException(StatusCode.NOT_FOUND, "Invalid path");
         }
 
-        String ipAddress = BytebinServer.getIpAddress(req);
+        String ipAddress = BytebinServer.getIpAddress(ctx);
 
         // check rate limits
-        if (this.rateLimiter.check(ipAddress)) return cors(req.response()).code(429).plain("Rate limit exceeded");
+        if (this.rateLimiter.check(ipAddress)) {
+            throw new StatusCodeException(StatusCode.TOO_MANY_REQUESTS, "Rate limit exceeded");
+        }
 
         // get the encodings supported by the requester
         // https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/Accept-Encoding
-        Set<String> supportedEncodings = ContentEncoding.getAcceptedEncoding(req);
+        Set<String> supportedEncodings = ContentEncoding.getAcceptedEncoding(ctx);
 
-        String origin = req.header("Origin", null);
+        String origin = ctx.header("Origin").valueOrNull();
         LOGGER.info("[REQUEST]\n" +
                 "    key = " + path + "\n" +
-                "    user agent = " + req.header("User-Agent", "null") + "\n" +
+                "    user agent = " + ctx.header("User-Agent").value("null") + "\n" +
                 "    ip = " + ipAddress + "\n" +
                 (origin == null ? "" : "    origin = " + origin + "\n")
         );
 
         // request the file from the cache async
-        this.contentCache.get(path).whenCompleteAsync((content, throwable) -> {
+        return this.contentCache.get(path).handleAsync((content, throwable) -> {
             if (throwable != null || content == null || content.getKey() == null || content.getContent().length == 0) {
-                cors(req.response()).code(404).plain("Invalid path").done();
-                return;
+                throw new StatusCodeException(StatusCode.NOT_FOUND, "Invalid path");
             }
 
-            String lastModifiedTime = DateTimeFormatter.RFC_1123_DATE_TIME.format(Instant.ofEpochMilli(content.getLastModified()).atOffset(ZoneOffset.UTC));
-
-            Resp resp = cors(req.response()).code(200).header("Last-Modified", lastModifiedTime);
+            ctx.setResponseHeader("Last-Modified", Instant.ofEpochMilli(content.getLastModified()));
 
             long expires = Duration.between(Instant.now(), content.getExpiry()).getSeconds();
             if (content.isModifiable() || expires <= 0L) {
-                resp.header("Cache-Control", "no-cache");
+                ctx.setResponseHeader("Cache-Control", "no-cache");
             } else {
-                resp.header("Cache-Control", "public, max-age=" + expires);
+                ctx.setResponseHeader("Cache-Control", "public, max-age=" + expires);
             }
 
             List<String> contentEncodingStrings = ContentEncoding.getContentEncoding(content.getEncoding());
 
             // requester supports the used content encoding, just serve as-is
             if (supportedEncodings.contains("*") || supportedEncodings.containsAll(contentEncodingStrings)) {
-                resp.header("Content-Encoding", content.getEncoding())
-                        .body(content.getContent())
-                        .contentType(MediaType.of(content.getContentType()))
-                        .done();
-                return;
+                ctx.setResponseHeader("Content-Encoding", content.getEncoding());
+                ctx.setResponseType(io.jooby.MediaType.valueOf(content.getContentType()));
+                return content.getContent();
             }
 
             // if it's compressed using gzip, we will uncompress on the server side
@@ -123,23 +120,17 @@ public final class GetHandler implements ReqHandler {
                 try {
                     uncompressed = Gzip.decompress(content.getContent());
                 } catch (IOException e) {
-                    cors(req.response()).code(404).plain("Unable to uncompress data").done();
-                    return;
+                    throw new StatusCodeException(StatusCode.NOT_FOUND, "Unable to uncompress data");
                 }
 
                 // return the uncompressed data
-                resp.body(uncompressed)
-                        .contentType(MediaType.of(content.getContentType()))
-                        .done();
-                return;
+                ctx.setResponseType(io.jooby.MediaType.valueOf(content.getContentType()));
+                return uncompressed;
             }
 
             // requester doesn't support the content encoding - there's nothing we can do
             // https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/406
-            cors(req.response()).code(406).plain("Accept-Encoding \"" + req.header("Accept-Encoding", "") + "\" does not contain Content-Encoding \"" + content.getEncoding() + "\"").done();
+            throw new StatusCodeException(StatusCode.NOT_ACCEPTABLE, "Accept-Encoding \"" + ctx.header("Accept-Encoding").value("") + "\" does not contain Content-Encoding \"" + content.getEncoding() + "\"");
         });
-
-        // mark that we're going to respond later
-        return req.async();
     }
 }

@@ -27,7 +27,7 @@ package me.lucko.bytebin.util;
 
 import com.google.common.base.Splitter;
 
-import org.rapidoid.http.Req;
+import io.jooby.Context;
 
 import java.util.ArrayList;
 import java.util.Collections;
@@ -46,8 +46,8 @@ public final class ContentEncoding {
     private static final Splitter COMMA_SPLITTER = Splitter.on(Pattern.compile(",\\s*"));
     private static final Pattern RE_SEMICOLON = Pattern.compile(";\\s*");
 
-    public static Set<String> getAcceptedEncoding(Req req) {
-        String header = req.header("Accept-Encoding", null);
+    public static Set<String> getAcceptedEncoding(Context ctx) {
+        String header = ctx.header("Accept-Encoding").valueOrNull();
         if (header == null || header.isEmpty()) {
             return Collections.singleton(IDENTITY);
         }
