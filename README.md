@@ -72,18 +72,17 @@ If you come across any content which is illegal or infringes on copyright, pleas
 
 bytebin uses:
 
-* [rapidoid](https://www.rapidoid.org/) as a web server
-* [caffeine](https://github.com/ben-manes/caffeine) to cache content & handle rate limits
-* [guava](https://github.com/google/guava) for byte stream manipulation
-* [gson](https://github.com/google/gson) to read the config
+* [jooby](https://jooby.io/) and [netty](https://netty.io/) for handling http requests
+* [caffeine](https://github.com/ben-manes/caffeine) for caching and rate limiting
+* [gson](https://github.com/google/gson) to read the configuration file on startup
 
 and plain ol' Java for everything else.
 
-## Benchmarks
+## Performance
 
-I haven't bothered doing anything proper, but... [rapidoid is pretty fast](https://www.techempower.com/benchmarks/#section=data-r15&hw=ph&test=plaintext&a=2), and [so is caffeine](https://github.com/ben-manes/caffeine/wiki/Benchmarks).
+I haven't had time to do any accurate benchmarks or performance testing, however, the libraries bytebin uses (see above) are known to be pretty efficient.
 
-The [public instance](#public-instances) handles approx ~250k requests per day and stores ~850k items at any one time. It doesn't seem to mind or use many resources!
+The [public instance](#public-instances) handles approx ~250k requests per day and stores ~1M items at any one time. It uses very little CPU resources and memory only up to the desired cache size.
 
 ## License
 MIT, have fun!
