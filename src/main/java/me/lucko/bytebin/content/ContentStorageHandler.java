@@ -33,6 +33,7 @@ import me.lucko.bytebin.util.Gzip;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
+import java.io.BufferedInputStream;
 import java.io.BufferedOutputStream;
 import java.io.DataInputStream;
 import java.io.DataOutputStream;
@@ -91,7 +92,7 @@ public class ContentStorageHandler implements CacheLoader<String, Content> {
             return Content.EMPTY_CONTENT;
         }
 
-        try (DataInputStream in = new DataInputStream(Files.newInputStream(resolved))) {
+        try (DataInputStream in = new DataInputStream(new BufferedInputStream(Files.newInputStream(resolved)))) {
             // read version
             int version = in.readInt();
 
