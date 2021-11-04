@@ -42,6 +42,7 @@ import io.jooby.Cors;
 import io.jooby.CorsHandler;
 import io.jooby.ExecutionMode;
 import io.jooby.Jooby;
+import io.jooby.MediaType;
 import io.jooby.ServerOptions;
 import io.jooby.StatusCode;
 import io.jooby.exception.StatusCodeException;
@@ -76,13 +77,13 @@ public class BytebinServer extends Jooby {
             if (rootCause instanceof StatusCodeException) {
                 // handle expected errors
                 ctx.setResponseCode(((StatusCodeException) rootCause).getStatusCode())
-                        .setResponseType(io.jooby.MediaType.TEXT)
+                        .setResponseType(MediaType.TEXT)
                         .send(rootCause.getMessage());
             } else {
                 // handle unexpected errors: log stack trace and send a generic response
                 LOGGER.error("Error thrown by handler", cause);
                 ctx.setResponseCode(StatusCode.NOT_FOUND)
-                        .setResponseType(io.jooby.MediaType.TEXT)
+                        .setResponseType(MediaType.TEXT)
                         .send("Invalid path");
             }
         });
@@ -102,7 +103,6 @@ public class BytebinServer extends Jooby {
                     .setHeaders("Content-Type", "Accept", "Origin", "Content-Encoding", "Allow-Modification")));
 
             post("/post", new PostHandler(this, postRateLimiter, contentStorageHandler, contentCache, contentTokenGenerator, maxContentLength, expiryHandler));
-            put("/{id:[a-zA-Z0-9]+}", new PutHandler(this, putRateLimiter, contentStorageHandler, contentCache, maxContentLength, expiryHandler));
         });
 
         routes(() -> {
@@ -110,9 +110,10 @@ public class BytebinServer extends Jooby {
                     .setUseCredentials(false)
                     .setMaxAge(Duration.ofDays(1))
                     .setMethods("GET", "PUT")
-                    .setHeaders("Content-Type", "Accept", "Origin", "Content-Encoding", "Modification-Key")));
+                    .setHeaders("Content-Type", "Accept", "Origin", "Content-Encoding", "Authorization")));
 
             get("/{id:[a-zA-Z0-9]+}", new GetHandler(this, readRateLimiter, contentCache));
+            put("/{id:[a-zA-Z0-9]+}", new PutHandler(this, putRateLimiter, contentStorageHandler, contentCache, maxContentLength, expiryHandler));
         });
     }
 

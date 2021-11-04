@@ -35,6 +35,7 @@ import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
 import io.jooby.Context;
+import io.jooby.MediaType;
 import io.jooby.Route;
 import io.jooby.StatusCode;
 import io.jooby.exception.StatusCodeException;
@@ -110,7 +111,7 @@ public final class GetHandler implements Route.Handler {
             // requester supports the used content encoding, just serve as-is
             if (supportedEncodings.contains("*") || supportedEncodings.containsAll(contentEncodingStrings)) {
                 ctx.setResponseHeader("Content-Encoding", content.getEncoding());
-                ctx.setResponseType(io.jooby.MediaType.valueOf(content.getContentType()));
+                ctx.setResponseType(MediaType.valueOf(content.getContentType()));
                 return content.getContent();
             }
 
@@ -124,7 +125,7 @@ public final class GetHandler implements Route.Handler {
                 }
 
                 // return the uncompressed data
-                ctx.setResponseType(io.jooby.MediaType.valueOf(content.getContentType()));
+                ctx.setResponseType(MediaType.valueOf(content.getContentType()));
                 return uncompressed;
             }
 

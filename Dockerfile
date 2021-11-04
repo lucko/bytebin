@@ -22,9 +22,9 @@ RUN $JAVA_HOME/bin/jlink \
 RUN apk add maven
 
 # compile the project
-COPY . /bytebin/
 WORKDIR /bytebin
-RUN mvn clean package
+COPY . .
+RUN mvn -B clean package
 
 
 # --------------
@@ -38,13 +38,13 @@ ENV PATH "${JAVA_HOME}/bin:${PATH}"
 COPY --from=build /jre $JAVA_HOME
 
 # copy app from build stage
-COPY --from=build /bytebin/target/bytebin.jar /opt/bytebin/
+WORKDIR /opt/bytebin
+COPY --from=build /bytebin/target/bytebin.jar .
 
 # define a simple healthcheck
 HEALTHCHECK  --interval=1m --timeout=3s \
     CMD wget http://localhost:8080/ -q -O - > /dev/null 2>&1 || exit 1
 
 # run the app
-WORKDIR /opt/bytebin
 CMD ["java", "-jar", "bytebin.jar"]
 EXPOSE 8080/tcp

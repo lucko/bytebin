@@ -92,10 +92,15 @@ public final class PutHandler implements Route.Handler {
             throw new StatusCodeException(StatusCode.TOO_MANY_REQUESTS, "Rate limit exceeded");
         }
 
-        String authKey = ctx.header("Modification-Key").valueOrNull();
-        if (authKey == null) {
-            throw new StatusCodeException(StatusCode.FORBIDDEN, "Modification-Key header not present");
+        String authHeader = ctx.header("Authorization").valueOrNull();
+        if (authHeader == null) {
+            throw new StatusCodeException(StatusCode.UNAUTHORIZED, "Authorization header not present");
         }
+
+        if (!authHeader.startsWith("Bearer ")) {
+            throw new StatusCodeException(StatusCode.UNAUTHORIZED, "Invalid Authorization scheme");
+        }
+        String authKey = authHeader.substring("Bearer ".length());
 
         return this.contentCache.get(path).handleAsync((oldContent, throwable) -> {
             if (throwable != null || oldContent == null || oldContent.getKey() == null || oldContent.getContent().length == 0) {
@@ -152,7 +157,7 @@ public final class PutHandler implements Route.Handler {
 
             // make the http response
             ctx.setResponseCode(StatusCode.OK);
-            ctx.send(Content.EMPTY_BYTES);
+            ctx.send();
 
             // save to disk
             this.contentStorageHandler.save(oldContent);
