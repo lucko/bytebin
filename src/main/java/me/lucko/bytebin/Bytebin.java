@@ -31,6 +31,7 @@ import me.lucko.bytebin.content.Content;
 import me.lucko.bytebin.content.ContentCache;
 import me.lucko.bytebin.content.ContentStorageHandler;
 import me.lucko.bytebin.http.BytebinServer;
+import me.lucko.bytebin.util.EnvVars;
 import me.lucko.bytebin.util.Configuration;
 import me.lucko.bytebin.util.Configuration.Option;
 import me.lucko.bytebin.util.ExpiryHandler;
@@ -56,7 +57,12 @@ import java.util.concurrent.TimeUnit;
 public final class Bytebin implements AutoCloseable {
 
     /** Logger instance */
-    private static final Logger LOGGER = LogManager.getLogger(Bytebin.class);
+    private static final Logger LOGGER;
+
+    static {
+        EnvVars.read();
+        LOGGER = LogManager.getLogger(Bytebin.class);
+    }
 
     // Bootstrap
     public static void main(String[] args) throws Exception {
