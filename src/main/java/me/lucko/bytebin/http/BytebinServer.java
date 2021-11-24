@@ -94,6 +94,9 @@ public class BytebinServer extends Jooby {
         // serve index page or favicon, otherwise 404
         assets("/*", new AssetHandler(wwwFiles, fourOhFour).setMaxAge(Duration.ofDays(1)));
 
+        // healthcheck endpoint
+        get("/health", ctx -> "{\"status\":\"ok\"}");
+
         // define route handlers
         routes(() -> {
             decorator(new CorsHandler(new Cors()

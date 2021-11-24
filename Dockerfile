@@ -41,9 +41,9 @@ COPY --from=build /jre $JAVA_HOME
 WORKDIR /opt/bytebin
 COPY --from=build /bytebin/target/bytebin.jar .
 
-# define a simple healthcheck
-HEALTHCHECK  --interval=1m --timeout=3s \
-    CMD wget http://localhost:8080/ -q -O - > /dev/null 2>&1 || exit 1
+# define a healthcheck
+HEALTHCHECK --interval=1m --timeout=5s \
+    CMD wget http://localhost:8080/health -q -O - | grep -c '{"status":"ok"}' || exit 1
 
 # run the app
 CMD ["java", "-jar", "bytebin.jar"]
