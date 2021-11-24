@@ -95,7 +95,10 @@ public class BytebinServer extends Jooby {
         assets("/*", new AssetHandler(wwwFiles, fourOhFour).setMaxAge(Duration.ofDays(1)));
 
         // healthcheck endpoint
-        get("/health", ctx -> "{\"status\":\"ok\"}");
+        get("/health", ctx -> {
+            ctx.setResponseHeader("Cache-Control", "no-cache");
+            return "{\"status\":\"ok\"}";
+        });
 
         // define route handlers
         routes(() -> {
