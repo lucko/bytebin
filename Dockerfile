@@ -10,6 +10,7 @@ FROM eclipse-temurin:17-alpine as build
 RUN apk add binutils
 
 # create a minimal JRE
+#ENV JAVA_TOOL_OPTIONS="-Djdk.lang.Process.launchMechanism=vfork"
 RUN $JAVA_HOME/bin/jlink \
     --add-modules java.base,java.logging,java.xml,java.desktop,java.management,java.sql,java.naming,jdk.unsupported \
     --strip-debug \
@@ -23,8 +24,9 @@ RUN apk add maven
 
 # compile the project
 WORKDIR /bytebin
-COPY . .
-RUN mvn -B clean package
+COPY pom.xml ./
+COPY src/ ./src/
+RUN mvn -B package
 
 
 # --------------
@@ -37,9 +39,16 @@ ENV JAVA_HOME=/opt/java
 ENV PATH "${JAVA_HOME}/bin:${PATH}"
 COPY --from=build /jre $JAVA_HOME
 
+RUN addgroup -S bytebin && adduser -S -G bytebin bytebin
+USER bytebin
+
 # copy app from build stage
 WORKDIR /opt/bytebin
 COPY --from=build /bytebin/target/bytebin.jar .
+
+# define a volume for the stored content
+RUN mkdir content && chown bytebin:bytebin content/
+VOLUME ["/opt/bytebin/content"]
 
 # define a healthcheck
 HEALTHCHECK --interval=1m --timeout=5s \
