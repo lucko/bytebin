@@ -47,8 +47,8 @@ WORKDIR /opt/bytebin
 COPY --from=build /bytebin/target/bytebin.jar .
 
 # define a volume for the stored content
-RUN mkdir content
-VOLUME ["/opt/bytebin/content"]
+RUN mkdir content logs
+VOLUME ["/opt/bytebin/content", "/opt/bytebin/logs"]
 
 # define a healthcheck
 HEALTHCHECK --interval=1m --timeout=5s \

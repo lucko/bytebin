@@ -98,7 +98,7 @@ public class Configuration {
         return get(option, ImmutableMap.of(),
                 str -> Splitter.on(',').withKeyValueSeparator('=').split(str).entrySet().stream()
                         .collect(ImmutableMap.toImmutableMap(
-                                Map.Entry::getKey,
+                                ent -> ent.getKey().trim(),
                                 ent -> Long.parseLong(ent.getValue())
                         )),
                 ele -> ele.getAsJsonObject().entrySet().stream()
