@@ -35,6 +35,7 @@ import me.lucko.bytebin.util.EnvVars;
 import me.lucko.bytebin.util.Configuration;
 import me.lucko.bytebin.util.Configuration.Option;
 import me.lucko.bytebin.util.ExpiryHandler;
+import me.lucko.bytebin.util.RateLimitHandler;
 import me.lucko.bytebin.util.RateLimiter;
 import me.lucko.bytebin.util.TokenGenerator;
 
@@ -116,6 +117,7 @@ public final class Bytebin implements AutoCloseable {
                 contentCache,
                 config.getString(Option.HOST, "0.0.0.0"),
                 config.getInt(Option.PORT, 8080),
+                new RateLimitHandler(config.getStringList(Option.API_KEYS)),
                 new RateLimiter(
                         // by default, allow posts at a rate of 30 times every 10 minutes (every 20s)
                         config.getInt(Option.POST_RATE_LIMIT_PERIOD, 10),

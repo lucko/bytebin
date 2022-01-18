@@ -26,6 +26,7 @@
 package me.lucko.bytebin.http;
 
 import me.lucko.bytebin.content.ContentCache;
+import me.lucko.bytebin.util.RateLimitHandler;
 import me.lucko.bytebin.util.ContentEncoding;
 import me.lucko.bytebin.util.Gzip;
 import me.lucko.bytebin.util.RateLimiter;
@@ -56,11 +57,13 @@ public final class GetHandler implements Route.Handler {
 
     private final BytebinServer server;
     private final RateLimiter rateLimiter;
+    private final RateLimitHandler rateLimitHandler;
     private final ContentCache contentCache;
 
-    public GetHandler(BytebinServer server, RateLimiter rateLimiter, ContentCache contentCache) {
+    public GetHandler(BytebinServer server, RateLimiter rateLimiter, RateLimitHandler rateLimitHandler, ContentCache contentCache) {
         this.server = server;
         this.rateLimiter = rateLimiter;
+        this.rateLimitHandler = rateLimitHandler;
         this.contentCache = contentCache;
     }
 
@@ -72,12 +75,8 @@ public final class GetHandler implements Route.Handler {
             throw new StatusCodeException(StatusCode.NOT_FOUND, "Invalid path");
         }
 
-        String ipAddress = BytebinServer.getIpAddress(ctx);
-
         // check rate limits
-        if (this.rateLimiter.check(ipAddress)) {
-            throw new StatusCodeException(StatusCode.TOO_MANY_REQUESTS, "Rate limit exceeded");
-        }
+        String ipAddress = this.rateLimitHandler.getIpAddressAndCheckRateLimit(ctx, this.rateLimiter);
 
         // get the encodings supported by the requester
         // https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/Accept-Encoding

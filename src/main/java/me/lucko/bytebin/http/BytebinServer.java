@@ -29,6 +29,7 @@ import me.lucko.bytebin.Bytebin;
 import me.lucko.bytebin.content.ContentCache;
 import me.lucko.bytebin.content.ContentStorageHandler;
 import me.lucko.bytebin.util.ExpiryHandler;
+import me.lucko.bytebin.util.RateLimitHandler;
 import me.lucko.bytebin.util.RateLimiter;
 import me.lucko.bytebin.util.TokenGenerator;
 
@@ -55,7 +56,7 @@ public class BytebinServer extends Jooby {
     /** Logger instance */
     private static final Logger LOGGER = LogManager.getLogger(BytebinServer.class);
 
-    public BytebinServer(ContentStorageHandler contentStorageHandler, ContentCache contentCache, String host, int port, RateLimiter postRateLimiter, RateLimiter putRateLimiter, RateLimiter readRateLimiter, TokenGenerator contentTokenGenerator, long maxContentLength, ExpiryHandler expiryHandler) {
+    public BytebinServer(ContentStorageHandler contentStorageHandler, ContentCache contentCache, String host, int port, RateLimitHandler rateLimitHandler, RateLimiter postRateLimiter, RateLimiter putRateLimiter, RateLimiter readRateLimiter, TokenGenerator contentTokenGenerator, long maxContentLength, ExpiryHandler expiryHandler) {
         ServerOptions serverOpts = new ServerOptions();
         serverOpts.setHost(host);
         serverOpts.setPort(port);
@@ -108,7 +109,7 @@ public class BytebinServer extends Jooby {
                     .setMethods("POST")
                     .setHeaders("Content-Type", "Accept", "Origin", "Content-Encoding", "Allow-Modification")));
 
-            post("/post", new PostHandler(this, postRateLimiter, contentStorageHandler, contentCache, contentTokenGenerator, maxContentLength, expiryHandler));
+            post("/post", new PostHandler(this, postRateLimiter, rateLimitHandler, contentStorageHandler, contentCache, contentTokenGenerator, maxContentLength, expiryHandler));
         });
 
         routes(() -> {
@@ -118,17 +119,9 @@ public class BytebinServer extends Jooby {
                     .setMethods("GET", "PUT")
                     .setHeaders("Content-Type", "Accept", "Origin", "Content-Encoding", "Authorization")));
 
-            get("/{id:[a-zA-Z0-9]+}", new GetHandler(this, readRateLimiter, contentCache));
-            put("/{id:[a-zA-Z0-9]+}", new PutHandler(this, putRateLimiter, contentStorageHandler, contentCache, maxContentLength, expiryHandler));
+            get("/{id:[a-zA-Z0-9]+}", new GetHandler(this, readRateLimiter, rateLimitHandler, contentCache));
+            put("/{id:[a-zA-Z0-9]+}", new PutHandler(this, putRateLimiter, rateLimitHandler, contentStorageHandler, contentCache, maxContentLength, expiryHandler));
         });
-    }
-
-    static String getIpAddress(Context ctx) {
-        String ipAddress = ctx.header("x-real-ip").valueOrNull();
-        if (ipAddress == null) {
-            ipAddress = ctx.getRemoteAddress();
-        }
-        return ipAddress;
     }
 
 }

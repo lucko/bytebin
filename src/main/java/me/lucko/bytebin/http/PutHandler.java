@@ -31,6 +31,7 @@ import me.lucko.bytebin.content.ContentStorageHandler;
 import me.lucko.bytebin.util.ContentEncoding;
 import me.lucko.bytebin.util.ExpiryHandler;
 import me.lucko.bytebin.util.Gzip;
+import me.lucko.bytebin.util.RateLimitHandler;
 import me.lucko.bytebin.util.RateLimiter;
 import me.lucko.bytebin.util.TokenGenerator;
 
@@ -56,15 +57,17 @@ public final class PutHandler implements Route.Handler {
 
     private final BytebinServer server;
     private final RateLimiter rateLimiter;
+    private final RateLimitHandler rateLimitHandler;
 
     private final ContentStorageHandler contentStorageHandler;
     private final ContentCache contentCache;
     private final long maxContentLength;
     private final ExpiryHandler expiryHandler;
 
-    public PutHandler(BytebinServer server, RateLimiter rateLimiter, ContentStorageHandler contentStorageHandler, ContentCache contentCache, long maxContentLength, ExpiryHandler expiryHandler) {
+    public PutHandler(BytebinServer server, RateLimiter rateLimiter, RateLimitHandler rateLimitHandler, ContentStorageHandler contentStorageHandler, ContentCache contentCache, long maxContentLength, ExpiryHandler expiryHandler) {
         this.server = server;
         this.rateLimiter = rateLimiter;
+        this.rateLimitHandler = rateLimitHandler;
         this.contentStorageHandler = contentStorageHandler;
         this.contentCache = contentCache;
         this.maxContentLength = maxContentLength;
@@ -81,16 +84,13 @@ public final class PutHandler implements Route.Handler {
 
         AtomicReference<byte[]> newContent = new AtomicReference<>(ctx.body().bytes());
 
-        String ipAddress = BytebinServer.getIpAddress(ctx);
-
         // ensure something was actually posted
         if (newContent.get().length == 0) {
             throw new StatusCodeException(StatusCode.BAD_REQUEST, "Missing content");
         }
+
         // check rate limits
-        if (this.rateLimiter.check(ipAddress)) {
-            throw new StatusCodeException(StatusCode.TOO_MANY_REQUESTS, "Rate limit exceeded");
-        }
+        String ipAddress = this.rateLimitHandler.getIpAddressAndCheckRateLimit(ctx, this.rateLimiter);
 
         String authHeader = ctx.header("Authorization").valueOrNull();
         if (authHeader == null) {

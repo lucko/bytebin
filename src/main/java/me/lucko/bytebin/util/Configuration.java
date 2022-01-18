@@ -26,6 +26,7 @@
 package me.lucko.bytebin.util;
 
 import com.google.common.base.Splitter;
+import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.gson.Gson;
 import com.google.gson.JsonElement;
@@ -36,9 +37,12 @@ import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.Collection;
 import java.util.Locale;
 import java.util.Map;
 import java.util.function.Function;
+import java.util.stream.Collectors;
+import java.util.stream.StreamSupport;
 
 /**
  * Json config wrapper class
@@ -109,6 +113,17 @@ public class Configuration {
         );
     }
 
+    public Collection<String> getStringList(Option option) {
+        return get(option, ImmutableList.of(),
+                str -> Splitter.on(',').splitToStream(str)
+                        .map(String::trim)
+                        .collect(Collectors.toList()),
+                ele -> StreamSupport.stream(ele.getAsJsonArray().spliterator(), false)
+                        .map(JsonElement::getAsString)
+                        .collect(Collectors.toList())
+        );
+    }
+
     public enum Option {
 
         HOST("host", "bytebin.http.host"),
@@ -123,6 +138,8 @@ public class Configuration {
 
         CACHE_EXPIRY("cacheExpiryMinutes", "bytebin.cache.expiry"), // minutes
         CACHE_MAX_SIZE("cacheMaxSizeMb", "bytebin.cache.maxsize"), // mb
+
+        API_KEYS("apiKeys", "bytebin.ratelimit.apikeys"), // list
 
         POST_RATE_LIMIT_PERIOD("postRateLimitPeriodMins", "bytebin.ratelimit.post.period"), // minutes
         POST_RATE_LIMIT("postRateLimit", "bytebin.ratelimit.post.amount"),
