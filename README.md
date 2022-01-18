@@ -9,7 +9,7 @@ bytebin is:
 
 * **fast** & (somewhat) **lightweight** - the focus is on the speed at which HTTP requests can be handled.
   * relatively *low* CPU usage
-  * relatively *high* memory usage (content is cached in memory, up to a configurable limit)
+  * relatively *high* memory usage (content is cached in memory by default, but this can be disabled)
 * **standalone** - it's just a simple Java app that listens for HTTP requests on a given port.
 * **efficient** - utilises compression to reduce disk usage and network load.
 * **flexible** - supports *any* content type or encoding. (and CORS too!)

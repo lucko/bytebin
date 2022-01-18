@@ -25,7 +25,10 @@
 
 package me.lucko.bytebin.content;
 
+import org.checkerframework.checker.units.qual.C;
+
 import java.time.Instant;
+import java.util.concurrent.CompletableFuture;
 
 /**
  * Encapsulates content within the service
@@ -49,6 +52,9 @@ public final class Content {
     private final String authKey;
     private String encoding;
     private byte[] content;
+
+    // future that is completed after the content has been saved to disk
+    private final CompletableFuture<Void> saveFuture = new CompletableFuture<>();
 
     public Content(String key, String contentType, Instant expiry, long lastModified, boolean modifiable, String authKey, String encoding, byte[] content) {
         this.key = key;
@@ -119,4 +125,9 @@ public final class Content {
         }
         return this.expiry.isBefore(Instant.now());
     }
+
+    public CompletableFuture<Void> getSaveFuture() {
+        return this.saveFuture;
+    }
+
 }

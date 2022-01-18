@@ -28,7 +28,7 @@ package me.lucko.bytebin;
 import com.google.common.util.concurrent.ThreadFactoryBuilder;
 
 import me.lucko.bytebin.content.Content;
-import me.lucko.bytebin.content.ContentCache;
+import me.lucko.bytebin.content.ContentLoader;
 import me.lucko.bytebin.content.ContentStorageHandler;
 import me.lucko.bytebin.http.BytebinServer;
 import me.lucko.bytebin.util.EnvVars;
@@ -99,8 +99,8 @@ public final class Bytebin implements AutoCloseable {
                 Paths.get("content")
         );
 
-        // build content cache
-        ContentCache contentCache = new ContentCache(
+        // build content loader
+        ContentLoader contentLoader = ContentLoader.create(
                 contentStorageHandler,
                 config.getInt(Option.CACHE_EXPIRY, 10),
                 config.getInt(Option.CACHE_MAX_SIZE, 200)
@@ -114,7 +114,7 @@ public final class Bytebin implements AutoCloseable {
         // setup the web server
         this.server = (BytebinServer) Jooby.createApp(new String[0], ExecutionMode.EVENT_LOOP, () -> new BytebinServer(
                 contentStorageHandler,
-                contentCache,
+                contentLoader,
                 config.getString(Option.HOST, "0.0.0.0"),
                 config.getInt(Option.PORT, 8080),
                 new RateLimitHandler(config.getStringList(Option.API_KEYS)),
@@ -141,7 +141,7 @@ public final class Bytebin implements AutoCloseable {
 
         // schedule invalidation task
         if (expiryHandler.hasExpiryTimes()) {
-            this.executor.scheduleWithFixedDelay(contentStorageHandler::runInvalidation, 1, contentCache.getCacheTimeMins(), TimeUnit.MINUTES);
+            this.executor.scheduleWithFixedDelay(contentStorageHandler::runInvalidation, 1, 15, TimeUnit.MINUTES);
         }
     }
 

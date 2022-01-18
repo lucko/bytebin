@@ -155,7 +155,11 @@ public class ContentStorageHandler implements CacheLoader<String, Content> {
         Content c = new Content(key, contentType, expiry, System.currentTimeMillis(), authKey != null, authKey, encoding, content);
         future.complete(c);
 
-        save(c);
+        try {
+            save(c);
+        } finally {
+            c.getSaveFuture().complete(null);
+        }
     }
 
     public void save(Content c) {

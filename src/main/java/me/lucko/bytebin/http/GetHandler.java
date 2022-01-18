@@ -25,7 +25,7 @@
 
 package me.lucko.bytebin.http;
 
-import me.lucko.bytebin.content.ContentCache;
+import me.lucko.bytebin.content.ContentLoader;
 import me.lucko.bytebin.util.RateLimitHandler;
 import me.lucko.bytebin.util.ContentEncoding;
 import me.lucko.bytebin.util.Gzip;
@@ -58,13 +58,13 @@ public final class GetHandler implements Route.Handler {
     private final BytebinServer server;
     private final RateLimiter rateLimiter;
     private final RateLimitHandler rateLimitHandler;
-    private final ContentCache contentCache;
+    private final ContentLoader contentLoader;
 
-    public GetHandler(BytebinServer server, RateLimiter rateLimiter, RateLimitHandler rateLimitHandler, ContentCache contentCache) {
+    public GetHandler(BytebinServer server, RateLimiter rateLimiter, RateLimitHandler rateLimitHandler, ContentLoader contentLoader) {
         this.server = server;
         this.rateLimiter = rateLimiter;
         this.rateLimitHandler = rateLimitHandler;
-        this.contentCache = contentCache;
+        this.contentLoader = contentLoader;
     }
 
     @Override
@@ -91,7 +91,7 @@ public final class GetHandler implements Route.Handler {
         );
 
         // request the file from the cache async
-        return this.contentCache.get(path).handleAsync((content, throwable) -> {
+        return this.contentLoader.get(path).handleAsync((content, throwable) -> {
             if (throwable != null || content == null || content.getKey() == null || content.getContent().length == 0) {
                 throw new StatusCodeException(StatusCode.NOT_FOUND, "Invalid path");
             }

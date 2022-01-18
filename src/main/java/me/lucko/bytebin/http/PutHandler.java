@@ -25,8 +25,7 @@
 
 package me.lucko.bytebin.http;
 
-import me.lucko.bytebin.content.Content;
-import me.lucko.bytebin.content.ContentCache;
+import me.lucko.bytebin.content.ContentLoader;
 import me.lucko.bytebin.content.ContentStorageHandler;
 import me.lucko.bytebin.util.ContentEncoding;
 import me.lucko.bytebin.util.ExpiryHandler;
@@ -60,16 +59,16 @@ public final class PutHandler implements Route.Handler {
     private final RateLimitHandler rateLimitHandler;
 
     private final ContentStorageHandler contentStorageHandler;
-    private final ContentCache contentCache;
+    private final ContentLoader contentLoader;
     private final long maxContentLength;
     private final ExpiryHandler expiryHandler;
 
-    public PutHandler(BytebinServer server, RateLimiter rateLimiter, RateLimitHandler rateLimitHandler, ContentStorageHandler contentStorageHandler, ContentCache contentCache, long maxContentLength, ExpiryHandler expiryHandler) {
+    public PutHandler(BytebinServer server, RateLimiter rateLimiter, RateLimitHandler rateLimitHandler, ContentStorageHandler contentStorageHandler, ContentLoader contentLoader, long maxContentLength, ExpiryHandler expiryHandler) {
         this.server = server;
         this.rateLimiter = rateLimiter;
         this.rateLimitHandler = rateLimitHandler;
         this.contentStorageHandler = contentStorageHandler;
-        this.contentCache = contentCache;
+        this.contentLoader = contentLoader;
         this.maxContentLength = maxContentLength;
         this.expiryHandler = expiryHandler;
     }
@@ -102,7 +101,7 @@ public final class PutHandler implements Route.Handler {
         }
         String authKey = authHeader.substring("Bearer ".length());
 
-        return this.contentCache.get(path).handleAsync((oldContent, throwable) -> {
+        return this.contentLoader.get(path).handleAsync((oldContent, throwable) -> {
             if (throwable != null || oldContent == null || oldContent.getKey() == null || oldContent.getContent().length == 0) {
                 // use a generic response to prevent use of this endpoint to search for valid content
                 throw new StatusCodeException(StatusCode.FORBIDDEN, "Incorrect modification key");

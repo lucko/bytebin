@@ -26,7 +26,7 @@
 package me.lucko.bytebin.http;
 
 import me.lucko.bytebin.content.Content;
-import me.lucko.bytebin.content.ContentCache;
+import me.lucko.bytebin.content.ContentLoader;
 import me.lucko.bytebin.content.ContentStorageHandler;
 import me.lucko.bytebin.util.RateLimitHandler;
 import me.lucko.bytebin.util.ContentEncoding;
@@ -59,18 +59,18 @@ public final class PostHandler implements Route.Handler {
     private final RateLimitHandler rateLimitHandler;
 
     private final ContentStorageHandler contentStorageHandler;
-    private final ContentCache contentCache;
+    private final ContentLoader contentLoader;
     private final TokenGenerator contentTokenGenerator;
     private final TokenGenerator authKeyTokenGenerator;
     private final long maxContentLength;
     private final ExpiryHandler expiryHandler;
 
-    public PostHandler(BytebinServer server, RateLimiter rateLimiter, RateLimitHandler rateLimitHandler, ContentStorageHandler contentStorageHandler, ContentCache contentCache, TokenGenerator contentTokenGenerator, long maxContentLength, ExpiryHandler expiryHandler) {
+    public PostHandler(BytebinServer server, RateLimiter rateLimiter, RateLimitHandler rateLimitHandler, ContentStorageHandler contentStorageHandler, ContentLoader contentLoader, TokenGenerator contentTokenGenerator, long maxContentLength, ExpiryHandler expiryHandler) {
         this.server = server;
         this.rateLimiter = rateLimiter;
         this.rateLimitHandler = rateLimitHandler;
         this.contentStorageHandler = contentStorageHandler;
-        this.contentCache = contentCache;
+        this.contentLoader = contentLoader;
         this.contentTokenGenerator = contentTokenGenerator;
         this.authKeyTokenGenerator = new TokenGenerator(32);
         this.maxContentLength = maxContentLength;
@@ -131,7 +131,7 @@ public final class PostHandler implements Route.Handler {
 
         // record the content in the cache
         CompletableFuture<Content> future = new CompletableFuture<>();
-        this.contentCache.put(key, future);
+        this.contentLoader.put(key, future);
 
         // check whether the content should be compressed by bytebin before saving
         boolean compressServerSide = encodings.isEmpty();
