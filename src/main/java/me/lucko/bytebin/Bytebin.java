@@ -31,9 +31,9 @@ import me.lucko.bytebin.content.Content;
 import me.lucko.bytebin.content.ContentLoader;
 import me.lucko.bytebin.content.ContentStorageHandler;
 import me.lucko.bytebin.http.BytebinServer;
-import me.lucko.bytebin.util.EnvVars;
 import me.lucko.bytebin.util.Configuration;
 import me.lucko.bytebin.util.Configuration.Option;
+import me.lucko.bytebin.util.EnvVars;
 import me.lucko.bytebin.util.ExpiryHandler;
 import me.lucko.bytebin.util.RateLimitHandler;
 import me.lucko.bytebin.util.RateLimiter;
@@ -46,6 +46,7 @@ import org.apache.logging.log4j.io.IoBuilder;
 
 import io.jooby.ExecutionMode;
 import io.jooby.Jooby;
+import io.prometheus.client.hotspot.DefaultExports;
 
 import java.nio.file.Paths;
 import java.util.concurrent.Executors;
@@ -111,12 +112,18 @@ public final class Bytebin implements AutoCloseable {
                 config.getLongMap(Option.MAX_CONTENT_LIFETIME_USER_AGENTS)
         );
 
+        boolean metrics = config.getBoolean(Option.METRICS, false);
+        if (metrics) {
+            DefaultExports.initialize();
+        }
+
         // setup the web server
         this.server = (BytebinServer) Jooby.createApp(new String[0], ExecutionMode.EVENT_LOOP, () -> new BytebinServer(
                 contentStorageHandler,
                 contentLoader,
                 config.getString(Option.HOST, "0.0.0.0"),
                 config.getInt(Option.PORT, 8080),
+                metrics,
                 new RateLimitHandler(config.getStringList(Option.API_KEYS)),
                 new RateLimiter(
                         // by default, allow posts at a rate of 30 times every 10 minutes (every 20s)
@@ -140,8 +147,8 @@ public final class Bytebin implements AutoCloseable {
         this.server.start();
 
         // schedule invalidation task
-        if (expiryHandler.hasExpiryTimes()) {
-            this.executor.scheduleWithFixedDelay(contentStorageHandler::runInvalidation, 1, 15, TimeUnit.MINUTES);
+        if (expiryHandler.hasExpiryTimes() || metrics) {
+            this.executor.scheduleWithFixedDelay(contentStorageHandler::runInvalidationAndRecordMetrics, 1, 15, TimeUnit.MINUTES);
         }
     }
 

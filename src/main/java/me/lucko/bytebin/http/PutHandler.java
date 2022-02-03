@@ -147,6 +147,9 @@ public final class PutHandler implements Route.Handler {
                     "    new content size = " + String.format("%,d", newContent.get().length / 1024) + " KB" + "\n"
             );
 
+            // metrics
+            BytebinServer.recordRequest("PUT", ctx);
+
             // update the content instance with the new data
             oldContent.setContentType(newContentType);
             oldContent.setEncoding(String.join(",", newEncodings));

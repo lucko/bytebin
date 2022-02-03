@@ -38,6 +38,7 @@ import org.apache.logging.log4j.Logger;
 
 import io.jooby.AssetHandler;
 import io.jooby.AssetSource;
+import io.jooby.Context;
 import io.jooby.Cors;
 import io.jooby.CorsHandler;
 import io.jooby.ExecutionMode;
@@ -46,6 +47,7 @@ import io.jooby.MediaType;
 import io.jooby.ServerOptions;
 import io.jooby.StatusCode;
 import io.jooby.exception.StatusCodeException;
+import io.prometheus.client.Counter;
 
 import java.time.Duration;
 import java.util.concurrent.CompletionException;
@@ -55,7 +57,13 @@ public class BytebinServer extends Jooby {
     /** Logger instance */
     private static final Logger LOGGER = LogManager.getLogger(BytebinServer.class);
 
-    public BytebinServer(ContentStorageHandler contentStorageHandler, ContentLoader contentLoader, String host, int port, RateLimitHandler rateLimitHandler, RateLimiter postRateLimiter, RateLimiter putRateLimiter, RateLimiter readRateLimiter, TokenGenerator contentTokenGenerator, long maxContentLength, ExpiryHandler expiryHandler) {
+    private static final Counter REQUESTS_COUNTER = Counter.build()
+            .name("bytebin_requests_total")
+            .help("The amount of requests handled")
+            .labelNames("method", "useragent")
+            .register();
+
+    public BytebinServer(ContentStorageHandler contentStorageHandler, ContentLoader contentLoader, String host, int port, boolean metrics, RateLimitHandler rateLimitHandler, RateLimiter postRateLimiter, RateLimiter putRateLimiter, RateLimiter readRateLimiter, TokenGenerator contentTokenGenerator, long maxContentLength, ExpiryHandler expiryHandler) {
         ServerOptions serverOpts = new ServerOptions();
         serverOpts.setHost(host);
         serverOpts.setPort(port);
@@ -100,6 +108,11 @@ public class BytebinServer extends Jooby {
             return "{\"status\":\"ok\"}";
         });
 
+        // metrics endpoint
+        if (metrics) {
+            get("/metrics", new MetricsHandler());
+        }
+
         // define route handlers
         routes(() -> {
             decorator(new CorsHandler(new Cors()
@@ -121,6 +134,28 @@ public class BytebinServer extends Jooby {
             get("/{id:[a-zA-Z0-9]+}", new GetHandler(this, readRateLimiter, rateLimitHandler, contentLoader));
             put("/{id:[a-zA-Z0-9]+}", new PutHandler(this, putRateLimiter, rateLimitHandler, contentStorageHandler, contentLoader, maxContentLength, expiryHandler));
         });
+    }
+
+    public static String getMetricsLabel(Context ctx) {
+        String origin = ctx.header("Origin").valueOrNull();
+        if (origin != null) {
+            return origin;
+        }
+
+        String userAgent = ctx.header("User-Agent").valueOrNull();
+        if (userAgent != null) {
+            return userAgent;
+        }
+
+        return "unknown";
+    }
+
+    public static void recordRequest(String method, Context ctx) {
+        recordRequest(method, getMetricsLabel(ctx));
+    }
+
+    public static void recordRequest(String method, String metricsLabel) {
+        REQUESTS_COUNTER.labels(method, metricsLabel).inc();
     }
 
 }

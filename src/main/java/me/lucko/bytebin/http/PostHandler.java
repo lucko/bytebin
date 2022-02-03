@@ -28,9 +28,9 @@ package me.lucko.bytebin.http;
 import me.lucko.bytebin.content.Content;
 import me.lucko.bytebin.content.ContentLoader;
 import me.lucko.bytebin.content.ContentStorageHandler;
-import me.lucko.bytebin.util.RateLimitHandler;
 import me.lucko.bytebin.util.ContentEncoding;
 import me.lucko.bytebin.util.ExpiryHandler;
+import me.lucko.bytebin.util.RateLimitHandler;
 import me.lucko.bytebin.util.RateLimiter;
 import me.lucko.bytebin.util.TokenGenerator;
 
@@ -42,6 +42,7 @@ import io.jooby.MediaType;
 import io.jooby.Route;
 import io.jooby.StatusCode;
 import io.jooby.exception.StatusCodeException;
+import io.prometheus.client.Summary;
 
 import java.time.Instant;
 import java.util.List;
@@ -53,6 +54,12 @@ public final class PostHandler implements Route.Handler {
 
     /** Logger instance */
     private static final Logger LOGGER = LogManager.getLogger(PostHandler.class);
+
+    public static final Summary CONTENT_SIZE_SUMMARY = Summary.build()
+            .name("bytebin_content_size_bytes")
+            .help("The size of posted content")
+            .labelNames("useragent")
+            .register();
 
     private final BytebinServer server;
     private final RateLimiter rateLimiter;
@@ -128,6 +135,11 @@ public final class PostHandler implements Route.Handler {
                 "    content size = " + String.format("%,d", content.length / 1024) + " KB\n" +
                 "    encoding = " + encodings.toString() + "\n"
         );
+
+        // metrics
+        String metricsLabel = BytebinServer.getMetricsLabel(ctx);
+        BytebinServer.recordRequest("POST", metricsLabel);
+        CONTENT_SIZE_SUMMARY.labels(metricsLabel).observe(content.length);
 
         // record the content in the cache
         CompletableFuture<Content> future = new CompletableFuture<>();

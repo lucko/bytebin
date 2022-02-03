@@ -33,6 +33,9 @@ import me.lucko.bytebin.util.Gzip;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
+import io.prometheus.client.Counter;
+import io.prometheus.client.Gauge;
+
 import java.io.BufferedInputStream;
 import java.io.BufferedOutputStream;
 import java.io.DataInputStream;
@@ -42,8 +45,12 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Instant;
+import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.Stream;
 
 /**
@@ -54,6 +61,19 @@ public class ContentStorageHandler implements CacheLoader<String, Content> {
 
     /** Logger instance */
     private static final Logger LOGGER = LogManager.getLogger(ContentStorageHandler.class);
+
+    public static final Gauge STORED_CONTENT_GAUGE = Gauge.build()
+            .name("bytebin_content")
+            .help("The amount of stored content")
+            .labelNames("type")
+            .register();
+
+    private static final Counter DISK_READS_COUNTER = Counter.build()
+            .name("bytebin_disk_reads_total")
+            .help("The amount of disk i/o reads")
+            .register();
+
+    private static final Set<String> SEEN_CONTENT_TYPES = ConcurrentHashMap.newKeySet();
 
     /** Executor service for performing file based i/o */
     private final ScheduledExecutorService executor;
@@ -76,6 +96,7 @@ public class ContentStorageHandler implements CacheLoader<String, Content> {
     @Override
     public Content load(String path) throws Exception {
         LOGGER.info("[I/O] Loading " + path + " from disk");
+        DISK_READS_COUNTER.inc();
 
         // resolve the path within the content dir
         try {
@@ -203,7 +224,12 @@ public class ContentStorageHandler implements CacheLoader<String, Content> {
         }
     }
 
-    public void runInvalidation() {
+    public void runInvalidationAndRecordMetrics() {
+        Map<String, AtomicInteger> counts = new ConcurrentHashMap<>();
+        for (String contentType : SEEN_CONTENT_TYPES) {
+            counts.put(contentType, new AtomicInteger());
+        }
+
         try (Stream<Path> stream = Files.list(this.contentPath)) {
             stream.filter(Files::isRegularFile)
                     .forEach(path -> {
@@ -212,6 +238,8 @@ public class ContentStorageHandler implements CacheLoader<String, Content> {
                             if (content.shouldExpire()) {
                                 LOGGER.info("Expired: " + path.getFileName().toString());
                                 Files.delete(path);
+                            } else {
+                                counts.computeIfAbsent(content.getContentType(), x -> new AtomicInteger()).incrementAndGet();
                             }
                         } catch (EOFException e) {
                             LOGGER.info("Corrupted: " + path.getFileName().toString());
@@ -227,5 +255,11 @@ public class ContentStorageHandler implements CacheLoader<String, Content> {
         } catch (IOException e) {
             LOGGER.error("Exception thrown whilst invalidating", e);
         }
+
+        // keep track of seen content types so that they get set back to 0 if
+        // all instances of a given type are deleted
+        SEEN_CONTENT_TYPES.addAll(counts.keySet());
+
+        counts.forEach((contentType, count) -> STORED_CONTENT_GAUGE.labels(contentType).set(count.get()));
     }
 }

@@ -25,8 +25,6 @@
 
 package me.lucko.bytebin.content;
 
-import org.checkerframework.checker.units.qual.C;
-
 import java.time.Instant;
 import java.util.concurrent.CompletableFuture;
 

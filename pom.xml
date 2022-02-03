@@ -121,6 +121,23 @@
             <artifactId>caffeine</artifactId>
             <version>3.0.5</version>
         </dependency>
+
+        <!-- prometheus-->
+        <dependency>
+            <groupId>io.prometheus</groupId>
+            <artifactId>simpleclient</artifactId>
+            <version>0.14.1</version>
+        </dependency>
+        <dependency>
+            <groupId>io.prometheus</groupId>
+            <artifactId>simpleclient_hotspot</artifactId>
+            <version>0.14.1</version>
+        </dependency>
+        <dependency>
+            <groupId>io.prometheus</groupId>
+            <artifactId>simpleclient_common</artifactId>
+            <version>0.14.1</version>
+        </dependency>
     </dependencies>
 
 </project>

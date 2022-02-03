@@ -98,6 +98,10 @@ public class Configuration {
         return get(option, def, Long::parseLong, JsonElement::getAsLong);
     }
 
+    public boolean getBoolean(Option option, boolean def) {
+        return get(option, def, Boolean::parseBoolean, JsonElement::getAsBoolean);
+    }
+
     public Map<String, Long> getLongMap(Option option) {
         return get(option, ImmutableMap.of(),
                 str -> Splitter.on(',').withKeyValueSeparator('=').split(str).entrySet().stream()
@@ -128,6 +132,8 @@ public class Configuration {
 
         HOST("host", "bytebin.http.host"),
         PORT("port", "bytebin.http.port"),
+
+        METRICS("metricsEnabled", "bytebin.metrics.enabled"),
 
         KEY_LENGTH("keyLength", "bytebin.misc.keylength"),
         EXECUTOR_POOL_SIZE("corePoolSize", "bytebin.misc.corepoolsize"),

@@ -26,9 +26,9 @@
 package me.lucko.bytebin.http;
 
 import me.lucko.bytebin.content.ContentLoader;
-import me.lucko.bytebin.util.RateLimitHandler;
 import me.lucko.bytebin.util.ContentEncoding;
 import me.lucko.bytebin.util.Gzip;
+import me.lucko.bytebin.util.RateLimitHandler;
 import me.lucko.bytebin.util.RateLimiter;
 import me.lucko.bytebin.util.TokenGenerator;
 
@@ -89,6 +89,9 @@ public final class GetHandler implements Route.Handler {
                 "    ip = " + ipAddress + "\n" +
                 (origin == null ? "" : "    origin = " + origin + "\n")
         );
+
+        // metrics
+        BytebinServer.recordRequest("GET", ctx);
 
         // request the file from the cache async
         return this.contentLoader.get(path).handleAsync((content, throwable) -> {
