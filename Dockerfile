@@ -4,14 +4,13 @@
 # --------------
 # BUILD STAGE
 # --------------
-FROM eclipse-temurin:17-alpine as build
+FROM alpine as build
 
-# for objcopy, needed by jlink
-RUN apk add binutils
+# install jdk17 and binutils (for objcopy, needed by jlink)
+RUN apk add --no-cache openjdk17 binutils
 
 # create a minimal JRE
-#ENV JAVA_TOOL_OPTIONS="-Djdk.lang.Process.launchMechanism=vfork"
-RUN $JAVA_HOME/bin/jlink \
+RUN jlink \
     --add-modules java.base,java.logging,java.xml,java.desktop,java.management,java.sql,java.naming,jdk.unsupported \
     --strip-debug \
     --no-man-pages \
