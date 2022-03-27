@@ -69,7 +69,6 @@ public class BytebinServer extends Jooby {
         serverOpts.setPort(port);
         serverOpts.setCompressionLevel(null);
         serverOpts.setMaxRequestSize((int) maxContentLength);
-        serverOpts.setWorkerThreads(4); // we use our own executor most of the time
         setServerOptions(serverOpts);
 
         setExecutionMode(ExecutionMode.EVENT_LOOP);
