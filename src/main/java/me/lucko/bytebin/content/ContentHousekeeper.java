@@ -25,9 +25,7 @@
 
 package me.lucko.bytebin.content;
 
-import com.google.common.hash.HashCode;
-import com.google.common.hash.HashFunction;
-import com.google.common.hash.Hashing;
+import me.lucko.bytebin.util.TokenGenerator;
 
 import io.prometheus.client.Gauge;
 
@@ -47,7 +45,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 final class ContentHousekeeper {
 
     /** The number of slices to use when performing housekeeping/metrics collection. */
-    public static final int SLICE_AMOUNT = 30;
+    public static final int SLICE_AMOUNT = TokenGenerator.CHARACTERS.length() / 2; // 31
 
     private static final Gauge STORED_CONTENT_GAUGE = Gauge.build()
             .name("bytebin_content")
@@ -151,14 +149,14 @@ final class ContentHousekeeper {
             ContentHousekeeper.this.seenContentTypes.addAll(this.counts.keySet());
         }
 
-        @SuppressWarnings("UnstableApiUsage")
         @Override
         public boolean accept(Path entry) {
-            // batch files in the directory based on the hashcode of their name/id.
-            // this means that a *roughly* equal number of files should be processed on each slice
-            int hash = Hashing.murmur3_32_fixed().hashUnencodedChars(entry.getFileName().toString()).asInt();
-            int mask = SLICE_AMOUNT - 1;
-            return (hash & mask) == this.idx;
+            // batch files in the directory based on the value of the first character in the id.
+            // since ids are randomly generated, this is a pretty good way to split the content
+            // into slices/buckets (without getting tied up in hash collision issues).
+            char firstChar = entry.getFileName().toString().charAt(0);
+            int characterIndex = TokenGenerator.CHARACTERS.indexOf(firstChar);
+            return (characterIndex / 2) == this.idx;
         }
 
         @Override
