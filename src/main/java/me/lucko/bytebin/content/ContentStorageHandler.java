@@ -34,7 +34,6 @@ import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
 import io.prometheus.client.Counter;
-import io.prometheus.client.Gauge;
 
 import java.io.BufferedInputStream;
 import java.io.BufferedOutputStream;
@@ -42,16 +41,12 @@ import java.io.DataInputStream;
 import java.io.DataOutputStream;
 import java.io.EOFException;
 import java.io.IOException;
+import java.nio.file.DirectoryStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Instant;
-import java.util.Map;
-import java.util.Set;
 import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ScheduledExecutorService;
-import java.util.concurrent.atomic.AtomicInteger;
-import java.util.stream.Stream;
 
 /**
  * Manages content i/o with the filesystem, including encoding an instance of {@link Content} into
@@ -62,24 +57,19 @@ public class ContentStorageHandler implements CacheLoader<String, Content> {
     /** Logger instance */
     private static final Logger LOGGER = LogManager.getLogger(ContentStorageHandler.class);
 
-    public static final Gauge STORED_CONTENT_GAUGE = Gauge.build()
-            .name("bytebin_content")
-            .help("The amount of stored content")
-            .labelNames("type")
-            .register();
-
     private static final Counter DISK_READS_COUNTER = Counter.build()
             .name("bytebin_disk_reads_total")
             .help("The amount of disk i/o reads")
             .register();
-
-    private static final Set<String> SEEN_CONTENT_TYPES = ConcurrentHashMap.newKeySet();
 
     /** Executor service for performing file based i/o */
     private final ScheduledExecutorService executor;
 
     // the path to store the content in
     private final Path contentPath;
+
+    // the housekeeper responsible to deleting expired content and computing metrics
+    private final ContentHousekeeper housekeeper = new ContentHousekeeper();
 
     public ContentStorageHandler(ScheduledExecutorService executor, Path contentPath) throws IOException {
         this.executor = executor;
@@ -225,41 +215,48 @@ public class ContentStorageHandler implements CacheLoader<String, Content> {
     }
 
     public void runInvalidationAndRecordMetrics() {
-        Map<String, AtomicInteger> counts = new ConcurrentHashMap<>();
-        for (String contentType : SEEN_CONTENT_TYPES) {
-            counts.put(contentType, new AtomicInteger());
-        }
+        for (ContentHousekeeper.Slice slice : this.housekeeper.getSlicesToProcess()) {
+            slice.begin();
+            int seen = 0;
+            int expired = 0;
 
-        try (Stream<Path> stream = Files.list(this.contentPath)) {
-            stream.filter(Files::isRegularFile)
-                    .forEach(path -> {
-                        try {
-                            Content content = loadMeta(path);
-                            if (content.shouldExpire()) {
-                                LOGGER.info("Expired: " + path.getFileName().toString());
-                                Files.delete(path);
-                            } else {
-                                counts.computeIfAbsent(content.getContentType(), x -> new AtomicInteger()).incrementAndGet();
-                            }
-                        } catch (EOFException e) {
-                            LOGGER.info("Corrupted: " + path.getFileName().toString());
-                            try {
-                                Files.delete(path);
-                            } catch (IOException e2) {
-                                // ignore
-                            }
-                        } catch (Exception e) {
-                            LOGGER.error("Exception occurred loading meta for '" + path.getFileName().toString() + "'", e);
+            try (DirectoryStream<Path> stream = Files.newDirectoryStream(this.contentPath, slice)) {
+                for (Path path : stream) {
+                    seen++;
+
+                    try {
+                        Content content = loadMeta(path);
+                        if (content.shouldExpire()) {
+                            LOGGER.info("[HOUSEKEEPING] Expired: " + path.getFileName().toString());
+                            Files.delete(path);
+                            expired++;
+                            continue;
                         }
-                    });
-        } catch (IOException e) {
-            LOGGER.error("Exception thrown whilst invalidating", e);
+
+                        slice.record(content.getContentType());
+
+                    } catch (EOFException eof) {
+                        LOGGER.error("[HOUSEKEEPING] Corrupted: " + path.getFileName().toString());
+                        try {
+                            Files.delete(path);
+                        } catch (IOException e) {
+                            // ignore
+                        }
+
+                    } catch (Exception e) {
+                        LOGGER.error("Exception occurred loading meta for '" + path.getFileName().toString() + "'", e);
+                    }
+                }
+
+            } catch (IOException e) {
+                LOGGER.error("Exception thrown while listing directory contents", e);
+            }
+
+            LOGGER.info("[HOUSEKEEPING] Expired " + expired + "/" + seen + " files in " + slice);
+
+            slice.done();
         }
 
-        // keep track of seen content types so that they get set back to 0 if
-        // all instances of a given type are deleted
-        SEEN_CONTENT_TYPES.addAll(counts.keySet());
-
-        counts.forEach((contentType, count) -> STORED_CONTENT_GAUGE.labels(contentType).set(count.get()));
+        this.housekeeper.updateMetrics();
     }
 }

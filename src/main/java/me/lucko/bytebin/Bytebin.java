@@ -112,7 +112,7 @@ public final class Bytebin implements AutoCloseable {
                 config.getLongMap(Option.MAX_CONTENT_LIFETIME_USER_AGENTS)
         );
 
-        boolean metrics = config.getBoolean(Option.METRICS, false);
+        boolean metrics = config.getBoolean(Option.METRICS, true);
         if (metrics) {
             DefaultExports.initialize();
         }
@@ -148,7 +148,7 @@ public final class Bytebin implements AutoCloseable {
 
         // schedule invalidation task
         if (expiryHandler.hasExpiryTimes() || metrics) {
-            this.executor.scheduleWithFixedDelay(contentStorageHandler::runInvalidationAndRecordMetrics, 1, 15, TimeUnit.MINUTES);
+            this.executor.scheduleWithFixedDelay(contentStorageHandler::runInvalidationAndRecordMetrics, 5, 30, TimeUnit.SECONDS);
         }
     }
 
