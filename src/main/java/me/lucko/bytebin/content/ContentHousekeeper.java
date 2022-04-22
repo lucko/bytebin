@@ -25,6 +25,10 @@
 
 package me.lucko.bytebin.content;
 
+import com.google.common.hash.HashCode;
+import com.google.common.hash.HashFunction;
+import com.google.common.hash.Hashing;
+
 import io.prometheus.client.Gauge;
 
 import java.nio.file.DirectoryStream;
@@ -147,11 +151,12 @@ final class ContentHousekeeper {
             ContentHousekeeper.this.seenContentTypes.addAll(this.counts.keySet());
         }
 
+        @SuppressWarnings("UnstableApiUsage")
         @Override
         public boolean accept(Path entry) {
             // batch files in the directory based on the hashcode of their name/id.
             // this means that a *roughly* equal number of files should be processed on each slice
-            int hash = hash(entry.getFileName().toString());
+            int hash = Hashing.murmur3_32_fixed().hashUnencodedChars(entry.getFileName().toString()).asInt();
             int mask = SLICE_AMOUNT - 1;
             return (hash & mask) == this.idx;
         }
@@ -160,10 +165,5 @@ final class ContentHousekeeper {
         public String toString() {
             return "slice " + this.idx;
         }
-    }
-
-    private static int hash(Object key) {
-        int h;
-        return (key == null) ? 0 : (h = key.hashCode()) ^ (h >>> 16);
     }
 }
