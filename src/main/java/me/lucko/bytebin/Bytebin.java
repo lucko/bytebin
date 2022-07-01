@@ -34,6 +34,7 @@ import me.lucko.bytebin.http.BytebinServer;
 import me.lucko.bytebin.util.Configuration;
 import me.lucko.bytebin.util.Configuration.Option;
 import me.lucko.bytebin.util.EnvVars;
+import me.lucko.bytebin.util.ExceptionHandler;
 import me.lucko.bytebin.util.ExpiryHandler;
 import me.lucko.bytebin.util.RateLimitHandler;
 import me.lucko.bytebin.util.RateLimiter;
@@ -89,6 +90,7 @@ public final class Bytebin implements AutoCloseable {
         LOGGER.info("loading bytebin...");
 
         // setup executor
+        Thread.setDefaultUncaughtExceptionHandler(ExceptionHandler.INSTANCE);
         this.executor = Executors.newScheduledThreadPool(
                 config.getInt(Option.EXECUTOR_POOL_SIZE, 16),
                 new ThreadFactoryBuilder().setNameFormat("bytebin-io-%d").build()

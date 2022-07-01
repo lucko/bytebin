@@ -215,6 +215,14 @@ public class ContentStorageHandler implements CacheLoader<String, Content> {
     }
 
     public void runInvalidationAndRecordMetrics() {
+        try {
+            runInvalidationAndRecordMetrics0();
+        } catch (Exception e) {
+            LOGGER.error("Error occurred while invalidating and recording metrics", e);
+        }
+    }
+
+    private void runInvalidationAndRecordMetrics0() {
         for (ContentHousekeeper.Slice slice : this.housekeeper.getSlicesToProcess()) {
             slice.begin();
             int seen = 0;
