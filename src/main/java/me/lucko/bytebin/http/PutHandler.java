@@ -26,7 +26,7 @@
 package me.lucko.bytebin.http;
 
 import me.lucko.bytebin.content.ContentLoader;
-import me.lucko.bytebin.content.ContentStorageHandler;
+import me.lucko.bytebin.content.storage.StorageBackend;
 import me.lucko.bytebin.util.ContentEncoding;
 import me.lucko.bytebin.util.ExpiryHandler;
 import me.lucko.bytebin.util.Gzip;
@@ -58,16 +58,16 @@ public final class PutHandler implements Route.Handler {
     private final RateLimiter rateLimiter;
     private final RateLimitHandler rateLimitHandler;
 
-    private final ContentStorageHandler contentStorageHandler;
+    private final StorageBackend storageBackend;
     private final ContentLoader contentLoader;
     private final long maxContentLength;
     private final ExpiryHandler expiryHandler;
 
-    public PutHandler(BytebinServer server, RateLimiter rateLimiter, RateLimitHandler rateLimitHandler, ContentStorageHandler contentStorageHandler, ContentLoader contentLoader, long maxContentLength, ExpiryHandler expiryHandler) {
+    public PutHandler(BytebinServer server, RateLimiter rateLimiter, RateLimitHandler rateLimitHandler, StorageBackend storageBackend, ContentLoader contentLoader, long maxContentLength, ExpiryHandler expiryHandler) {
         this.server = server;
         this.rateLimiter = rateLimiter;
         this.rateLimitHandler = rateLimitHandler;
-        this.contentStorageHandler = contentStorageHandler;
+        this.storageBackend = storageBackend;
         this.contentLoader = contentLoader;
         this.maxContentLength = maxContentLength;
         this.expiryHandler = expiryHandler;
@@ -162,10 +162,10 @@ public final class PutHandler implements Route.Handler {
             ctx.send();
 
             // save to disk
-            this.contentStorageHandler.save(oldContent);
+            this.storageBackend.save(oldContent);
 
             return null;
-        }, this.contentStorageHandler.getExecutor());
+        }, this.storageBackend.getExecutor());
     }
 
 }

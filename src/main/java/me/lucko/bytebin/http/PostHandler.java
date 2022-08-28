@@ -27,7 +27,8 @@ package me.lucko.bytebin.http;
 
 import me.lucko.bytebin.content.Content;
 import me.lucko.bytebin.content.ContentLoader;
-import me.lucko.bytebin.content.ContentStorageHandler;
+import me.lucko.bytebin.content.storage.LocalDiskStorageBackend;
+import me.lucko.bytebin.content.storage.StorageBackend;
 import me.lucko.bytebin.util.ContentEncoding;
 import me.lucko.bytebin.util.ExpiryHandler;
 import me.lucko.bytebin.util.RateLimitHandler;
@@ -65,18 +66,18 @@ public final class PostHandler implements Route.Handler {
     private final RateLimiter rateLimiter;
     private final RateLimitHandler rateLimitHandler;
 
-    private final ContentStorageHandler contentStorageHandler;
+    private final StorageBackend storageBackend;
     private final ContentLoader contentLoader;
     private final TokenGenerator contentTokenGenerator;
     private final TokenGenerator authKeyTokenGenerator;
     private final long maxContentLength;
     private final ExpiryHandler expiryHandler;
 
-    public PostHandler(BytebinServer server, RateLimiter rateLimiter, RateLimitHandler rateLimitHandler, ContentStorageHandler contentStorageHandler, ContentLoader contentLoader, TokenGenerator contentTokenGenerator, long maxContentLength, ExpiryHandler expiryHandler) {
+    public PostHandler(BytebinServer server, RateLimiter rateLimiter, RateLimitHandler rateLimitHandler, StorageBackend storageBackend, ContentLoader contentLoader, TokenGenerator contentTokenGenerator, long maxContentLength, ExpiryHandler expiryHandler) {
         this.server = server;
         this.rateLimiter = rateLimiter;
         this.rateLimitHandler = rateLimitHandler;
-        this.contentStorageHandler = contentStorageHandler;
+        this.storageBackend = storageBackend;
         this.contentLoader = contentLoader;
         this.contentTokenGenerator = contentTokenGenerator;
         this.authKeyTokenGenerator = new TokenGenerator(32);
@@ -152,7 +153,7 @@ public final class PostHandler implements Route.Handler {
         }
 
         String encoding = String.join(",", encodings);
-        this.contentStorageHandler.getExecutor().execute(() -> this.contentStorageHandler.save(key, contentType, content, expiry, authKey, compressServerSide, encoding, future));
+        this.storageBackend.getExecutor().execute(() -> this.storageBackend.save(key, contentType, content, expiry, authKey, compressServerSide, encoding, future));
 
         // return the url location as plain content
         ctx.setResponseCode(StatusCode.CREATED);

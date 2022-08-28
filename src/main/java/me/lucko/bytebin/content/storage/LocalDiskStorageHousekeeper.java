@@ -23,7 +23,7 @@
  *  SOFTWARE.
  */
 
-package me.lucko.bytebin.content;
+package me.lucko.bytebin.content.storage;
 
 import me.lucko.bytebin.util.TokenGenerator;
 
@@ -42,7 +42,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 /**
  * Housekeeper for content expiry and metrics collection
  */
-final class ContentHousekeeper {
+final class LocalDiskStorageHousekeeper {
 
     /** The number of slices to use when performing housekeeping/metrics collection. */
     public static final int SLICE_AMOUNT = TokenGenerator.CHARACTERS.length() / 2; // 31
@@ -75,7 +75,7 @@ final class ContentHousekeeper {
      */
     private boolean firstRun = true;
 
-    ContentHousekeeper() {
+    LocalDiskStorageHousekeeper() {
         this.slices = new Slice[SLICE_AMOUNT];
         for (int i = 0; i < this.slices.length; i++) {
             this.slices[i] = new Slice(i);
@@ -128,7 +128,7 @@ final class ContentHousekeeper {
          */
         public void begin() {
             this.counts = new ConcurrentHashMap<>();
-            for (String contentType : ContentHousekeeper.this.seenContentTypes) {
+            for (String contentType : LocalDiskStorageHousekeeper.this.seenContentTypes) {
                 this.counts.put(contentType, new AtomicInteger());
             }
         }
@@ -146,7 +146,7 @@ final class ContentHousekeeper {
          * Record the seen content types in the global set
          */
         public void done() {
-            ContentHousekeeper.this.seenContentTypes.addAll(this.counts.keySet());
+            LocalDiskStorageHousekeeper.this.seenContentTypes.addAll(this.counts.keySet());
         }
 
         @Override

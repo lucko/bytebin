@@ -23,39 +23,35 @@
  *  SOFTWARE.
  */
 
-package me.lucko.bytebin.content;
+package me.lucko.bytebin.content.storage;
 
-import com.github.benmanes.caffeine.cache.CacheLoader;
-
-import me.lucko.bytebin.util.ContentEncoding;
-import me.lucko.bytebin.util.Gzip;
+import me.lucko.bytebin.content.Content;
+import me.lucko.bytebin.content.ContentIO;
 
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
+import org.checkerframework.checker.nullness.qual.NonNull;
 
 import io.prometheus.client.Counter;
 
 import java.io.BufferedInputStream;
 import java.io.BufferedOutputStream;
 import java.io.DataInputStream;
-import java.io.DataOutputStream;
 import java.io.EOFException;
 import java.io.IOException;
 import java.nio.file.DirectoryStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.time.Instant;
-import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ScheduledExecutorService;
 
 /**
  * Manages content i/o with the filesystem, including encoding an instance of {@link Content} into
  * a single array of bytes
  */
-public class ContentStorageHandler implements CacheLoader<String, Content> {
+public class LocalDiskStorageBackend implements StorageBackend {
 
     /** Logger instance */
-    private static final Logger LOGGER = LogManager.getLogger(ContentStorageHandler.class);
+    private static final Logger LOGGER = LogManager.getLogger(LocalDiskStorageBackend.class);
 
     private static final Counter DISK_READS_COUNTER = Counter.build()
             .name("bytebin_disk_reads_total")
@@ -69,9 +65,9 @@ public class ContentStorageHandler implements CacheLoader<String, Content> {
     private final Path contentPath;
 
     // the housekeeper responsible to deleting expired content and computing metrics
-    private final ContentHousekeeper housekeeper = new ContentHousekeeper();
+    private final LocalDiskStorageHousekeeper housekeeper = new LocalDiskStorageHousekeeper();
 
-    public ContentStorageHandler(ScheduledExecutorService executor, Path contentPath) throws IOException {
+    public LocalDiskStorageBackend(ScheduledExecutorService executor, Path contentPath) throws IOException {
         this.executor = executor;
         this.contentPath = contentPath;
 
@@ -79,6 +75,7 @@ public class ContentStorageHandler implements CacheLoader<String, Content> {
         Files.createDirectories(this.contentPath);
     }
 
+    @Override
     public ScheduledExecutorService getExecutor() {
         return this.executor;
     }
@@ -104,116 +101,32 @@ public class ContentStorageHandler implements CacheLoader<String, Content> {
         }
 
         try (DataInputStream in = new DataInputStream(new BufferedInputStream(Files.newInputStream(resolved)))) {
-            // read version
-            int version = in.readInt();
-
-            // read key
-            String key = in.readUTF();
-
-            // read content type
-            byte[] contentTypeBytes = new byte[in.readInt()];
-            in.readFully(contentTypeBytes);
-            String contentType = new String(contentTypeBytes);
-
-            // read expiry
-            long expiry = in.readLong();
-            Instant expiryInstant = expiry == -1 ? Instant.MAX : Instant.ofEpochMilli(expiry);
-
-            // read last modified time
-            long lastModified = in.readLong();
-
-            // read modifiable state data
-            boolean modifiable = in.readBoolean();
-            String authKey = null;
-            if (modifiable) {
-                authKey = in.readUTF();
-            }
-
-            // read encoding
-            String encoding;
-            if (version == 1) {
-                encoding = ContentEncoding.GZIP;
-            } else {
-                byte[] encodingBytes = new byte[in.readInt()];
-                in.readFully(encodingBytes);
-                encoding = new String(encodingBytes);
-            }
-
-            // read content
-            byte[] content;
-            if (skipContent) {
-                content = Content.EMPTY_BYTES;
-            } else {
-                content = new byte[in.readInt()];
-                in.readFully(content);
-            }
-
-            return new Content(key, contentType, expiryInstant, lastModified, modifiable, authKey, encoding, content);
+            return ContentIO.read(in, skipContent);
         }
+    }
+
+    @Override
+    public @NonNull Content loadMeta(String path) throws Exception {
+        return loadMeta(this.contentPath.resolve(path));
     }
 
     public Content loadMeta(Path resolved) throws IOException {
         return load(resolved, true);
     }
 
-    public void save(String key, String contentType, byte[] content, Instant expiry, String authKey, boolean requiresCompression, String encoding, CompletableFuture<Content> future) {
-        if (requiresCompression) {
-            content = Gzip.compress(content);
-        }
-
-        // add directly to the cache
-        // it's quite likely that the file will be requested only a few seconds after it is uploaded
-        Content c = new Content(key, contentType, expiry, System.currentTimeMillis(), authKey != null, authKey, encoding, content);
-        future.complete(c);
-
-        try {
-            save(c);
-        } finally {
-            c.getSaveFuture().complete(null);
-        }
-    }
-
+    @Override
     public void save(Content c) {
         // resolve the path to save at
         Path path = this.contentPath.resolve(c.getKey());
 
-        try (DataOutputStream out = new DataOutputStream(new BufferedOutputStream(Files.newOutputStream(path)))) {
-            // write version
-            out.writeInt(2);
-
-            // write name
-            out.writeUTF(c.getKey());
-
-            // write content type
-            byte[] contextType = c.getContentType().getBytes();
-            out.writeInt(contextType.length);
-            out.write(contextType);
-
-            // write expiry time
-            out.writeLong(c.getExpiry() == Instant.MAX ? -1 : c.getExpiry().toEpochMilli());
-
-            // write last modified
-            out.writeLong(c.getLastModified());
-
-            // write modifiable state data
-            out.writeBoolean(c.isModifiable());
-            if (c.isModifiable()) {
-                out.writeUTF(c.getAuthKey());
-            }
-
-            // write encoding
-            byte[] encoding = c.getEncoding().getBytes();
-            out.writeInt(encoding.length);
-            out.write(encoding);
-
-            // write content
-            out.writeInt(c.getContent().length);
-            out.write(c.getContent());
+        try (BufferedOutputStream out = new BufferedOutputStream(Files.newOutputStream(path))) {
+            ContentIO.write(c, out);
         } catch (IOException e) {
             LOGGER.error("Exception occurred saving '" + path + "'", e);
         }
     }
 
+    @Override
     public void runInvalidationAndRecordMetrics() {
         try {
             runInvalidationAndRecordMetrics0();
@@ -223,7 +136,7 @@ public class ContentStorageHandler implements CacheLoader<String, Content> {
     }
 
     private void runInvalidationAndRecordMetrics0() {
-        for (ContentHousekeeper.Slice slice : this.housekeeper.getSlicesToProcess()) {
+        for (LocalDiskStorageHousekeeper.Slice slice : this.housekeeper.getSlicesToProcess()) {
             slice.begin();
             int seen = 0;
             int expired = 0;
