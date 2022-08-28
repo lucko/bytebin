@@ -32,7 +32,7 @@ import java.io.DataOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
-import java.time.Instant;
+import java.util.Date;
 
 public final class ContentIO {
 
@@ -53,7 +53,7 @@ public final class ContentIO {
         out.write(contextType);
 
         // write expiry time
-        out.writeLong(c.getExpiry() == Instant.MAX ? -1 : c.getExpiry().toEpochMilli());
+        out.writeLong(c.getExpiry() == null ? -1 : c.getExpiry().getTime());
 
         // write last modified
         out.writeLong(c.getLastModified());
@@ -90,7 +90,7 @@ public final class ContentIO {
 
         // read expiry
         long expiry = in.readLong();
-        Instant expiryInstant = expiry == -1 ? Instant.MAX : Instant.ofEpochMilli(expiry);
+        Date expiryDate = expiry == -1 ? null : new Date(expiry);
 
         // read last modified time
         long lastModified = in.readLong();
@@ -113,15 +113,18 @@ public final class ContentIO {
         }
 
         // read content
-        byte[] content;
+        int contentLength = in.readInt();
+
         if (skipContent) {
-            content = Content.EMPTY_BYTES;
+            Content content = new Content(key, contentType, expiryDate, lastModified, modifiable, authKey, encoding, Content.EMPTY_BYTES);
+            content.setContentLength(contentLength);
+            return content;
         } else {
-            content = new byte[in.readInt()];
+            byte[] content = new byte[contentLength];
             in.readFully(content);
+            return new Content(key, contentType, expiryDate, lastModified, modifiable, authKey, encoding, content);
         }
 
-        return new Content(key, contentType, expiryInstant, lastModified, modifiable, authKey, encoding, content);
     }
 
 }

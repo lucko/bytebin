@@ -29,8 +29,6 @@ import com.github.benmanes.caffeine.cache.AsyncLoadingCache;
 import com.github.benmanes.caffeine.cache.Caffeine;
 import com.github.benmanes.caffeine.cache.Weigher;
 
-import me.lucko.bytebin.content.storage.StorageBackend;
-
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
@@ -41,11 +39,11 @@ import java.util.concurrent.TimeUnit;
  */
 public interface ContentLoader {
 
-    static ContentLoader create(StorageBackend backend, int cacheTimeMins, int cacheMaxSizeMb) {
+    static ContentLoader create(ContentStorageHandler storageHandler, int cacheTimeMins, int cacheMaxSizeMb) {
         if (cacheTimeMins > 0 && cacheMaxSizeMb > 0) {
-            return new CachedContentLoader(backend, cacheTimeMins, cacheMaxSizeMb);
+            return new CachedContentLoader(storageHandler, cacheTimeMins, cacheMaxSizeMb);
         } else {
-            return new DirectContentLoader(backend);
+            return new DirectContentLoader(storageHandler);
         }
     }
 
@@ -71,13 +69,13 @@ public interface ContentLoader {
     final class CachedContentLoader implements ContentLoader {
         private final AsyncLoadingCache<String, Content> cache;
 
-        CachedContentLoader(StorageBackend backend, int cacheTimeMins, int cacheMaxSizeMb) {
+        CachedContentLoader(ContentStorageHandler storageHandler, int cacheTimeMins, int cacheMaxSizeMb) {
             this.cache = Caffeine.newBuilder()
-                    .executor(backend.getExecutor())
+                    .executor(storageHandler.getExecutor())
                     .expireAfterAccess(cacheTimeMins, TimeUnit.MINUTES)
                     .maximumWeight(cacheMaxSizeMb * Content.MEGABYTE_LENGTH)
                     .weigher((Weigher<String, Content>) (path, content) -> content.getContent().length)
-                    .buildAsync(backend);
+                    .buildAsync(storageHandler);
         }
 
         @Override
@@ -95,11 +93,11 @@ public interface ContentLoader {
      * A {@link ContentLoader} that makes requests directly to the storage handler with no caching.
      */
     final class DirectContentLoader implements ContentLoader {
-        private final StorageBackend backend;
+        private final ContentStorageHandler storageHandler;
         private final Map<String, CompletableFuture<Content>> saveInProgress = new ConcurrentHashMap<>();
 
-        DirectContentLoader(StorageBackend backend) {
-            this.backend = backend;
+        DirectContentLoader(ContentStorageHandler storageHandler) {
+            this.storageHandler = storageHandler;
         }
 
         @Override
@@ -120,7 +118,7 @@ public interface ContentLoader {
                 return saveInProgressFuture;
             }
 
-            return this.backend.asyncLoad(key, this.backend.getExecutor());
+            return this.storageHandler.asyncLoad(key, this.storageHandler.getExecutor());
         }
     }
 

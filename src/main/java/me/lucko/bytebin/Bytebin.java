@@ -25,11 +25,14 @@
 
 package me.lucko.bytebin;
 
+import com.google.common.collect.ImmutableList;
 import com.google.common.util.concurrent.ThreadFactoryBuilder;
 
 import me.lucko.bytebin.content.Content;
 import me.lucko.bytebin.content.ContentLoader;
-import me.lucko.bytebin.content.storage.LocalDiskStorageBackend;
+import me.lucko.bytebin.content.ContentStorageHandler;
+import me.lucko.bytebin.content.ContentIndexDatabase;
+import me.lucko.bytebin.content.storage.LocalDiskBackend;
 import me.lucko.bytebin.content.storage.StorageBackend;
 import me.lucko.bytebin.http.BytebinServer;
 import me.lucko.bytebin.util.Configuration;
@@ -51,6 +54,7 @@ import io.jooby.Jooby;
 import io.prometheus.client.hotspot.DefaultExports;
 
 import java.nio.file.Paths;
+import java.util.List;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
@@ -76,12 +80,18 @@ public final class Bytebin implements AutoCloseable {
 
         // setup a new bytebin instance
         Configuration config = Configuration.load(Paths.get("config.json"));
-        Bytebin bytebin = new Bytebin(config);
-        Runtime.getRuntime().addShutdownHook(new Thread(bytebin::close, "Bytebin Shutdown Thread"));
+        try {
+            Bytebin bytebin = new Bytebin(config);
+            Runtime.getRuntime().addShutdownHook(new Thread(bytebin::close, "Bytebin Shutdown Thread"));
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
     }
 
     /** Executor service for performing file based i/o */
     private final ScheduledExecutorService executor;
+
+    private final ContentIndexDatabase indexDatabase;
 
     /** The web server instance */
     private final BytebinServer server;
@@ -97,15 +107,17 @@ public final class Bytebin implements AutoCloseable {
                 new ThreadFactoryBuilder().setNameFormat("bytebin-io-%d").build()
         );
 
-        // setup loader
-        StorageBackend storageBackend = new LocalDiskStorageBackend(
-                this.executor,
-                Paths.get("content")
+        // setup storage backends
+        List<StorageBackend> storageBackends = ImmutableList.of(
+                new LocalDiskBackend("local", Paths.get("content"))
         );
 
-        // build content loader
+        this.indexDatabase = ContentIndexDatabase.initialise(storageBackends);
+
+        ContentStorageHandler storageHandler = new ContentStorageHandler(this.indexDatabase, storageBackends, this.executor);
+
         ContentLoader contentLoader = ContentLoader.create(
-                storageBackend,
+                storageHandler,
                 config.getInt(Option.CACHE_EXPIRY, 10),
                 config.getInt(Option.CACHE_MAX_SIZE, 200)
         );
@@ -122,7 +134,7 @@ public final class Bytebin implements AutoCloseable {
 
         // setup the web server
         this.server = (BytebinServer) Jooby.createApp(new String[0], ExecutionMode.EVENT_LOOP, () -> new BytebinServer(
-                storageBackend,
+                storageHandler,
                 contentLoader,
                 config.getString(Option.HOST, "0.0.0.0"),
                 config.getInt(Option.PORT, 8080),
@@ -151,7 +163,7 @@ public final class Bytebin implements AutoCloseable {
 
         // schedule invalidation task
         if (expiryHandler.hasExpiryTimes() || metrics) {
-            this.executor.scheduleWithFixedDelay(storageBackend::runInvalidationAndRecordMetrics, 5, 30, TimeUnit.SECONDS);
+            this.executor.scheduleWithFixedDelay(storageHandler::runInvalidationAndRecordMetrics, 5, 60 * 5, TimeUnit.SECONDS);
         }
     }
 
@@ -163,6 +175,11 @@ public final class Bytebin implements AutoCloseable {
             this.executor.awaitTermination(30, TimeUnit.SECONDS);
         } catch (InterruptedException e) {
             LOGGER.error("Exception whilst shutting down executor", e);
+        }
+        try {
+            this.indexDatabase.close();
+        } catch (Exception e) {
+            LOGGER.error("Exception whilst shutting down index database", e);
         }
     }
 

@@ -27,10 +27,10 @@ package me.lucko.bytebin.http;
 
 import me.lucko.bytebin.content.Content;
 import me.lucko.bytebin.content.ContentLoader;
-import me.lucko.bytebin.content.storage.LocalDiskStorageBackend;
-import me.lucko.bytebin.content.storage.StorageBackend;
+import me.lucko.bytebin.content.ContentStorageHandler;
 import me.lucko.bytebin.util.ContentEncoding;
 import me.lucko.bytebin.util.ExpiryHandler;
+import me.lucko.bytebin.util.Gzip;
 import me.lucko.bytebin.util.RateLimitHandler;
 import me.lucko.bytebin.util.RateLimiter;
 import me.lucko.bytebin.util.TokenGenerator;
@@ -46,6 +46,7 @@ import io.jooby.exception.StatusCodeException;
 import io.prometheus.client.Summary;
 
 import java.time.Instant;
+import java.util.Date;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
 
@@ -66,18 +67,18 @@ public final class PostHandler implements Route.Handler {
     private final RateLimiter rateLimiter;
     private final RateLimitHandler rateLimitHandler;
 
-    private final StorageBackend storageBackend;
+    private final ContentStorageHandler storageHandler;
     private final ContentLoader contentLoader;
     private final TokenGenerator contentTokenGenerator;
     private final TokenGenerator authKeyTokenGenerator;
     private final long maxContentLength;
     private final ExpiryHandler expiryHandler;
 
-    public PostHandler(BytebinServer server, RateLimiter rateLimiter, RateLimitHandler rateLimitHandler, StorageBackend storageBackend, ContentLoader contentLoader, TokenGenerator contentTokenGenerator, long maxContentLength, ExpiryHandler expiryHandler) {
+    public PostHandler(BytebinServer server, RateLimiter rateLimiter, RateLimitHandler rateLimitHandler, ContentStorageHandler storageHandler, ContentLoader contentLoader, TokenGenerator contentTokenGenerator, long maxContentLength, ExpiryHandler expiryHandler) {
         this.server = server;
         this.rateLimiter = rateLimiter;
         this.rateLimitHandler = rateLimitHandler;
-        this.storageBackend = storageBackend;
+        this.storageHandler = storageHandler;
         this.contentLoader = contentLoader;
         this.contentTokenGenerator = contentTokenGenerator;
         this.authKeyTokenGenerator = new TokenGenerator(32);
@@ -111,7 +112,7 @@ public final class PostHandler implements Route.Handler {
         String userAgent = ctx.header("User-Agent").value("null");
         String origin = ctx.header("Origin").value("null");
 
-        Instant expiry = this.expiryHandler.getExpiry(userAgent, origin);
+        Date expiry = this.expiryHandler.getExpiry(userAgent, origin);
 
         // check max content length
         if (content.length > this.maxContentLength) {
@@ -153,7 +154,23 @@ public final class PostHandler implements Route.Handler {
         }
 
         String encoding = String.join(",", encodings);
-        this.storageBackend.getExecutor().execute(() -> this.storageBackend.save(key, contentType, content, expiry, authKey, compressServerSide, encoding, future));
+        this.storageHandler.getExecutor().execute(() -> {
+            byte[] buf = content;
+            if (compressServerSide) {
+                buf = Gzip.compress(buf);
+            }
+
+            // add directly to the cache
+            // it's quite likely that the file will be requested only a few seconds after it is uploaded
+            Content c = new Content(key, contentType, expiry, System.currentTimeMillis(), authKey != null, authKey, encoding, buf);
+            future.complete(c);
+
+            try {
+                this.storageHandler.save(c);
+            } finally {
+                c.getSaveFuture().complete(null);
+            }
+        });
 
         // return the url location as plain content
         ctx.setResponseCode(StatusCode.CREATED);

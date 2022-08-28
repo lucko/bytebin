@@ -25,44 +25,54 @@
 
 package me.lucko.bytebin.content.storage;
 
-import com.github.benmanes.caffeine.cache.CacheLoader;
-
 import me.lucko.bytebin.content.Content;
-import me.lucko.bytebin.util.Gzip;
 
-import org.checkerframework.checker.nullness.qual.NonNull;
+import java.util.stream.Stream;
 
-import java.time.Instant;
-import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.Executor;
+/**
+ * The storage backend interface.
+ */
+public interface StorageBackend {
 
-public interface StorageBackend extends CacheLoader<String, Content> {
+    /**
+     * Get the id of the backend.
+     *
+     * @return the id
+     */
+    String getBackendId();
 
-    @Override
-    @NonNull Content load(String key) throws Exception;
+    /**
+     * Loads content from the backend.
+     *
+     * @param key the key to identify the content
+     * @return the content, or null
+     * @throws Exception catch all
+     */
+    Content load(String key) throws Exception;
 
-    @NonNull Content loadMeta(String key) throws Exception;
+    /**
+     * Saves content to the backend.
+     *
+     * @param content the content
+     * @throws Exception catch all
+     */
+    void save(Content content) throws Exception;
 
-    default void save(String key, String contentType, byte[] content, Instant expiry, String authKey, boolean requiresCompression, String encoding, CompletableFuture<Content> future) {
-        if (requiresCompression) {
-            content = Gzip.compress(content);
-        }
+    /**
+     * Deletes content from the backend.
+     *
+     * @param key the key to identify the content
+     * @throws Exception catch all
+     */
+    void delete(String key) throws Exception;
 
-        // add directly to the cache
-        // it's quite likely that the file will be requested only a few seconds after it is uploaded
-        Content c = new Content(key, contentType, expiry, System.currentTimeMillis(), authKey != null, authKey, encoding, content);
-        future.complete(c);
+    /**
+     * Lists metadata about all the content stored in the backend. (doesn't load the actual data).
+     * Used primarily if the index needs to be rebuilt.
+     *
+     * @return a list of metadata
+     * @throws Exception catch all
+     */
+    Stream<Content> list() throws Exception;
 
-        try {
-            save(c);
-        } finally {
-            c.getSaveFuture().complete(null);
-        }
-    }
-
-    void save(Content content);
-
-    void runInvalidationAndRecordMetrics();
-
-    Executor getExecutor();
 }

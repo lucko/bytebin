@@ -26,6 +26,7 @@
 package me.lucko.bytebin.http;
 
 import me.lucko.bytebin.content.ContentLoader;
+import me.lucko.bytebin.content.ContentStorageHandler;
 import me.lucko.bytebin.content.storage.StorageBackend;
 import me.lucko.bytebin.util.ContentEncoding;
 import me.lucko.bytebin.util.ExpiryHandler;
@@ -43,6 +44,7 @@ import io.jooby.StatusCode;
 import io.jooby.exception.StatusCodeException;
 
 import java.time.Instant;
+import java.util.Date;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.atomic.AtomicReference;
@@ -58,16 +60,16 @@ public final class PutHandler implements Route.Handler {
     private final RateLimiter rateLimiter;
     private final RateLimitHandler rateLimitHandler;
 
-    private final StorageBackend storageBackend;
+    private final ContentStorageHandler storageHandler;
     private final ContentLoader contentLoader;
     private final long maxContentLength;
     private final ExpiryHandler expiryHandler;
 
-    public PutHandler(BytebinServer server, RateLimiter rateLimiter, RateLimitHandler rateLimitHandler, StorageBackend storageBackend, ContentLoader contentLoader, long maxContentLength, ExpiryHandler expiryHandler) {
+    public PutHandler(BytebinServer server, RateLimiter rateLimiter, RateLimitHandler rateLimitHandler, ContentStorageHandler storageHandler, ContentLoader contentLoader, long maxContentLength, ExpiryHandler expiryHandler) {
         this.server = server;
         this.rateLimiter = rateLimiter;
         this.rateLimitHandler = rateLimitHandler;
-        this.storageBackend = storageBackend;
+        this.storageHandler = storageHandler;
         this.contentLoader = contentLoader;
         this.maxContentLength = maxContentLength;
         this.expiryHandler = expiryHandler;
@@ -134,7 +136,7 @@ public final class PutHandler implements Route.Handler {
             String userAgent = ctx.header("User-Agent").value("null");
             String origin = ctx.header("Origin").value("null");
 
-            Instant newExpiry = this.expiryHandler.getExpiry(userAgent, origin);
+            Date newExpiry = this.expiryHandler.getExpiry(userAgent, origin);
 
             LOGGER.info("[PUT]\n" +
                     "    key = " + path + "\n" +
@@ -162,10 +164,10 @@ public final class PutHandler implements Route.Handler {
             ctx.send();
 
             // save to disk
-            this.storageBackend.save(oldContent);
+            this.storageHandler.save(oldContent);
 
             return null;
-        }, this.storageBackend.getExecutor());
+        }, this.storageHandler.getExecutor());
     }
 
 }
