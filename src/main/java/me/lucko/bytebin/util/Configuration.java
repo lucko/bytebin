@@ -138,6 +138,11 @@ public class Configuration {
         KEY_LENGTH("keyLength", "bytebin.misc.keylength"),
         EXECUTOR_POOL_SIZE("corePoolSize", "bytebin.misc.corepoolsize"),
 
+        S3("s3", "bytebin.storage.s3"),
+        S3_BUCKET("s3Bucket", "bytebin.storage.s3.bucket"),
+        S3_EXPIRY_THRESHOLD("s3ExpiryThreshold", "bytebin.storage.s3.expiry.threshold"), // minutes
+        S3_SIZE_THRESHOLD("s3SizeThreshold", "bytebin.storage.s3.size.threshold"), // kb
+
         MAX_CONTENT_LENGTH("maxContentLengthMb", "bytebin.content.maxsize"), // mb
         MAX_CONTENT_LIFETIME("lifetimeMinutes", "bytebin.content.expiry"), // minutes
         MAX_CONTENT_LIFETIME_USER_AGENTS("lifetimeMinutesByUserAgent", "bytebin.content.expiry.useragents"), // minutes

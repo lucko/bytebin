@@ -27,7 +27,6 @@ package me.lucko.bytebin.http;
 
 import me.lucko.bytebin.content.ContentLoader;
 import me.lucko.bytebin.content.ContentStorageHandler;
-import me.lucko.bytebin.content.storage.StorageBackend;
 import me.lucko.bytebin.util.ContentEncoding;
 import me.lucko.bytebin.util.ExpiryHandler;
 import me.lucko.bytebin.util.Gzip;
@@ -43,7 +42,6 @@ import io.jooby.Route;
 import io.jooby.StatusCode;
 import io.jooby.exception.StatusCodeException;
 
-import java.time.Instant;
 import java.util.Date;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;

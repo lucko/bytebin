@@ -25,14 +25,15 @@
 
 package me.lucko.bytebin;
 
-import com.google.common.collect.ImmutableList;
 import com.google.common.util.concurrent.ThreadFactoryBuilder;
 
 import me.lucko.bytebin.content.Content;
+import me.lucko.bytebin.content.ContentIndexDatabase;
 import me.lucko.bytebin.content.ContentLoader;
 import me.lucko.bytebin.content.ContentStorageHandler;
-import me.lucko.bytebin.content.ContentIndexDatabase;
+import me.lucko.bytebin.content.StorageBackendSelector;
 import me.lucko.bytebin.content.storage.LocalDiskBackend;
+import me.lucko.bytebin.content.storage.S3Backend;
 import me.lucko.bytebin.content.storage.StorageBackend;
 import me.lucko.bytebin.http.BytebinServer;
 import me.lucko.bytebin.util.Configuration;
@@ -54,6 +55,7 @@ import io.jooby.Jooby;
 import io.prometheus.client.hotspot.DefaultExports;
 
 import java.nio.file.Paths;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
@@ -108,13 +110,32 @@ public final class Bytebin implements AutoCloseable {
         );
 
         // setup storage backends
-        List<StorageBackend> storageBackends = ImmutableList.of(
-                new LocalDiskBackend("local", Paths.get("content"))
-        );
+        List<StorageBackend> storageBackends = new ArrayList<>();
+
+        LocalDiskBackend localDiskBackend = new LocalDiskBackend("local", Paths.get("content"));
+        storageBackends.add(localDiskBackend);
+
+        StorageBackendSelector backendSelector;
+        if (config.getBoolean(Option.S3, false)) {
+            S3Backend s3Backend = new S3Backend("s3", config.getString(Option.S3_BUCKET, "bytebin"));
+            storageBackends.add(s3Backend);
+
+            backendSelector = new StorageBackendSelector.IfExpiryGt(
+                    config.getInt(Option.S3_EXPIRY_THRESHOLD, 2880), // 2 days
+                    s3Backend,
+                    new StorageBackendSelector.IfSizeGt(
+                            config.getInt(Option.S3_SIZE_THRESHOLD, 100) * Content.KILOBYTE_LENGTH, // 100kb
+                            s3Backend,
+                            new StorageBackendSelector.Static(localDiskBackend)
+                    )
+            );
+        } else {
+            backendSelector = new StorageBackendSelector.Static(localDiskBackend);
+        }
 
         this.indexDatabase = ContentIndexDatabase.initialise(storageBackends);
 
-        ContentStorageHandler storageHandler = new ContentStorageHandler(this.indexDatabase, storageBackends, this.executor);
+        ContentStorageHandler storageHandler = new ContentStorageHandler(this.indexDatabase, storageBackends, backendSelector, this.executor);
 
         ContentLoader contentLoader = ContentLoader.create(
                 storageHandler,

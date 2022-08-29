@@ -45,7 +45,6 @@ import io.jooby.StatusCode;
 import io.jooby.exception.StatusCodeException;
 import io.prometheus.client.Summary;
 
-import java.time.Instant;
 import java.util.Date;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;

@@ -29,7 +29,6 @@ import com.j256.ormlite.field.DataType;
 import com.j256.ormlite.field.DatabaseField;
 import com.j256.ormlite.table.DatabaseTable;
 
-import java.time.Instant;
 import java.util.Date;
 import java.util.concurrent.CompletableFuture;
 
@@ -47,6 +46,9 @@ public final class Content {
 
     /** Number of bytes in a megabyte */
     public static final long MEGABYTE_LENGTH = 1024L * 1024L;
+
+    /** Number of bytes in a kilobyte */
+    public static final long KILOBYTE_LENGTH = 1024L;
 
     /** The key used to identify the content */
     @DatabaseField(columnName = "key", id = true, canBeNull = false)

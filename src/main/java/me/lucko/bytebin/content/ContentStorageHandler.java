@@ -67,14 +67,18 @@ public class ContentStorageHandler implements CacheLoader<String, Content> {
     /** The backends in use for content storage */
     private final Map<String, StorageBackend> backends;
 
+    /** The function used to select which backend to use for content storage */
+    private final StorageBackendSelector backendSelector;
+
     /** The executor to use for i/o */
     private final ScheduledExecutorService executor;
 
-    public ContentStorageHandler(ContentIndexDatabase contentIndex, Collection<StorageBackend> backends, ScheduledExecutorService executor) {
+    public ContentStorageHandler(ContentIndexDatabase contentIndex, Collection<StorageBackend> backends, StorageBackendSelector backendSelector, ScheduledExecutorService executor) {
         this.index = contentIndex;
         this.backends = backends.stream().collect(ImmutableMap.toImmutableMap(
                 StorageBackend::getBackendId, Function.identity()
         ));
+        this.backendSelector = backendSelector;
         this.executor = executor;
     }
 
@@ -119,24 +123,13 @@ public class ContentStorageHandler implements CacheLoader<String, Content> {
     }
 
     /**
-     * Select the backend to store the given content in.
-     *
-     * @param content the content to store
-     * @return the selected backend
-     */
-    public StorageBackend selectBackend(Content content) {
-        StorageBackend backend = this.backends.get("local");
-        return backend;
-    }
-
-    /**
      * Save content.
      *
      * @param content the content to save
      */
     public void save(Content content) {
         // select a backend to store the content in
-        StorageBackend backend = selectBackend(content);
+        StorageBackend backend = this.backendSelector.select(content);
         String backendId = backend.getBackendId();
 
         // record which backend the content is going to be stored in, and write to the index
@@ -168,7 +161,7 @@ public class ContentStorageHandler implements CacheLoader<String, Content> {
             String backendId = metadata.getBackendId();
             StorageBackend backend = this.backends.get(backendId);
             if (backend == null) {
-                LOGGER.error("[HOUSEKEEPING] Unable to delete " + key + " - no such backend '" + backendId + "'");
+                LOGGER.error("[STORAGE] Unable to delete " + key + " - no such backend '" + backendId + "'");
                 continue;
             }
 
@@ -182,7 +175,7 @@ public class ContentStorageHandler implements CacheLoader<String, Content> {
             // remove the entry from the index
             this.index.remove(key);
 
-            LOGGER.info("[HOUSEKEEPING] Deleted '" + key + "' from the '" + backendId + "' backend");
+            LOGGER.info("[STORAGE] Deleted '" + key + "' from the '" + backendId + "' backend");
         }
 
         // update metrics
