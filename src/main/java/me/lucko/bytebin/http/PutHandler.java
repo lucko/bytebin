@@ -42,7 +42,7 @@ import io.jooby.Route;
 import io.jooby.StatusCode;
 import io.jooby.exception.StatusCodeException;
 
-import java.time.Instant;
+import java.util.Date;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.atomic.AtomicReference;
@@ -58,16 +58,16 @@ public final class PutHandler implements Route.Handler {
     private final RateLimiter rateLimiter;
     private final RateLimitHandler rateLimitHandler;
 
-    private final ContentStorageHandler contentStorageHandler;
+    private final ContentStorageHandler storageHandler;
     private final ContentLoader contentLoader;
     private final long maxContentLength;
     private final ExpiryHandler expiryHandler;
 
-    public PutHandler(BytebinServer server, RateLimiter rateLimiter, RateLimitHandler rateLimitHandler, ContentStorageHandler contentStorageHandler, ContentLoader contentLoader, long maxContentLength, ExpiryHandler expiryHandler) {
+    public PutHandler(BytebinServer server, RateLimiter rateLimiter, RateLimitHandler rateLimitHandler, ContentStorageHandler storageHandler, ContentLoader contentLoader, long maxContentLength, ExpiryHandler expiryHandler) {
         this.server = server;
         this.rateLimiter = rateLimiter;
         this.rateLimitHandler = rateLimitHandler;
-        this.contentStorageHandler = contentStorageHandler;
+        this.storageHandler = storageHandler;
         this.contentLoader = contentLoader;
         this.maxContentLength = maxContentLength;
         this.expiryHandler = expiryHandler;
@@ -134,7 +134,7 @@ public final class PutHandler implements Route.Handler {
             String userAgent = ctx.header("User-Agent").value("null");
             String origin = ctx.header("Origin").value("null");
 
-            Instant newExpiry = this.expiryHandler.getExpiry(userAgent, origin);
+            Date newExpiry = this.expiryHandler.getExpiry(userAgent, origin);
 
             LOGGER.info("[PUT]\n" +
                     "    key = " + path + "\n" +
@@ -162,10 +162,10 @@ public final class PutHandler implements Route.Handler {
             ctx.send();
 
             // save to disk
-            this.contentStorageHandler.save(oldContent);
+            this.storageHandler.save(oldContent);
 
             return null;
-        }, this.contentStorageHandler.getExecutor());
+        }, this.storageHandler.getExecutor());
     }
 
 }

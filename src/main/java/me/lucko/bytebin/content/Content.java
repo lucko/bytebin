@@ -25,36 +25,72 @@
 
 package me.lucko.bytebin.content;
 
-import java.time.Instant;
+import com.j256.ormlite.field.DataType;
+import com.j256.ormlite.field.DatabaseField;
+import com.j256.ormlite.table.DatabaseTable;
+
+import java.util.Date;
 import java.util.concurrent.CompletableFuture;
 
 /**
- * Encapsulates content within the service
+ * Encapsulates a piece of stored content.
  */
+@DatabaseTable(tableName = "content")
 public final class Content {
 
     /** Empty byte array */
     public static final byte[] EMPTY_BYTES = new byte[0];
 
     /** Empty content instance */
-    public static final Content EMPTY_CONTENT = new Content(null, "text/plain", Instant.MAX, Long.MIN_VALUE, false, null, "", EMPTY_BYTES);
+    public static final Content EMPTY_CONTENT = new Content(null, "text/plain", null, Long.MIN_VALUE, false, null, "", EMPTY_BYTES);
 
     /** Number of bytes in a megabyte */
     public static final long MEGABYTE_LENGTH = 1024L * 1024L;
 
-    private final String key;
+    /** Number of bytes in a kilobyte */
+    public static final long KILOBYTE_LENGTH = 1024L;
+
+    /** The key used to identify the content */
+    @DatabaseField(columnName = "key", id = true, canBeNull = false)
+    private String key;
+
+    /** The type of the content */
+    @DatabaseField(columnName = "content_type", index = true)
     private String contentType;
-    private Instant expiry;
+
+    /** The time when the content will expire */
+    @DatabaseField(columnName = "expiry", dataType = DataType.DATE_INTEGER, index = true)
+    private Date expiry;
+
+    /** The time when the content was last modified in unix millis */
+    @DatabaseField(columnName = "last_modified")
     private long lastModified;
-    private final boolean modifiable;
-    private final String authKey;
+
+    /** If the content can be modified using PUT requests */
+    private boolean modifiable;
+
+    /** The auth key required to modify the content */
+    private String authKey;
+
+    /** The 'Content-Encoding' used to encode this content */
+    @DatabaseField(columnName = "encoding")
     private String encoding;
+
+    /** The id of the backend currently storing this content - use null for unknown */
+    @DatabaseField(columnName = "backend_id")
+    private String backendId;
+
+    /** The actual content, optional */
     private byte[] content;
+
+    /** The length of the content */
+    @DatabaseField(columnName = "content_length")
+    private int contentLength;
 
     // future that is completed after the content has been saved to disk
     private final CompletableFuture<Void> saveFuture = new CompletableFuture<>();
 
-    public Content(String key, String contentType, Instant expiry, long lastModified, boolean modifiable, String authKey, String encoding, byte[] content) {
+    public Content(String key, String contentType, Date expiry, long lastModified, boolean modifiable, String authKey, String encoding, byte[] content) {
         this.key = key;
         this.contentType = contentType;
         this.expiry = expiry;
@@ -63,6 +99,12 @@ public final class Content {
         this.authKey = authKey;
         this.encoding = encoding;
         this.content = content;
+        this.contentLength = content.length;
+    }
+
+    // for ormlite
+    Content() {
+
     }
 
     public String getKey() {
@@ -77,11 +119,11 @@ public final class Content {
         this.contentType = contentType;
     }
 
-    public Instant getExpiry() {
+    public Date getExpiry() {
         return this.expiry;
     }
 
-    public void setExpiry(Instant expiry) {
+    public void setExpiry(Date expiry) {
         this.expiry = expiry;
     }
 
@@ -109,19 +151,29 @@ public final class Content {
         this.encoding = encoding;
     }
 
+    public String getBackendId() {
+        return this.backendId;
+    }
+
+    public void setBackendId(String backendId) {
+        this.backendId = backendId;
+    }
+
     public byte[] getContent() {
         return this.content;
     }
 
     public void setContent(byte[] content) {
         this.content = content;
+        this.contentLength = content.length;
     }
 
-    public boolean shouldExpire() {
-        if (this.expiry == Instant.MAX) {
-            return false;
-        }
-        return this.expiry.isBefore(Instant.now());
+    public int getContentLength() {
+        return this.contentLength;
+    }
+
+    public void setContentLength(int contentLength) {
+        this.contentLength = contentLength;
     }
 
     public CompletableFuture<Void> getSaveFuture() {

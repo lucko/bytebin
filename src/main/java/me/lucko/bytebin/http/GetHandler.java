@@ -42,7 +42,6 @@ import io.jooby.StatusCode;
 import io.jooby.exception.StatusCodeException;
 
 import java.io.IOException;
-import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
 import java.util.Set;
@@ -101,11 +100,10 @@ public final class GetHandler implements Route.Handler {
 
             ctx.setResponseHeader("Last-Modified", Instant.ofEpochMilli(content.getLastModified()));
 
-            long expires = Duration.between(Instant.now(), content.getExpiry()).getSeconds();
-            if (content.isModifiable() || expires <= 0L) {
+            if (content.isModifiable()) {
                 ctx.setResponseHeader("Cache-Control", "no-cache");
             } else {
-                ctx.setResponseHeader("Cache-Control", "public, max-age=" + expires);
+                ctx.setResponseHeader("Cache-Control", "public, max-age=604800");
             }
 
             List<String> contentEncodingStrings = ContentEncoding.getContentEncoding(content.getEncoding());

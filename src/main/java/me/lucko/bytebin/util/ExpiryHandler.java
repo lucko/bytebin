@@ -30,6 +30,7 @@ import com.google.common.collect.ImmutableMap;
 
 import java.time.Duration;
 import java.time.Instant;
+import java.util.Date;
 import java.util.Map;
 
 public final class ExpiryHandler {
@@ -67,13 +68,13 @@ public final class ExpiryHandler {
      * @param origin the origin of the client that posted the content
      * @return the expiry time, or {@link Instant#MAX} if it should never expire
      */
-    public Instant getExpiry(String userAgent, String origin) {
+    public Date getExpiry(String userAgent, String origin) {
         Duration duration = this.specificLifetimes.getOrDefault(userAgent, this.specificLifetimes.getOrDefault(origin, this.defaultLifetime));
         if (duration.isZero()) {
-            return Instant.MAX;
+            return null;
         }
 
-        return Instant.now().plus(duration);
+        return new Date(Instant.now().plus(duration).toEpochMilli());
     }
 
     private static Duration toDuration(long minutes) {

@@ -39,11 +39,11 @@ import java.util.concurrent.TimeUnit;
  */
 public interface ContentLoader {
 
-    static ContentLoader create(ContentStorageHandler loader, int cacheTimeMins, int cacheMaxSizeMb) {
+    static ContentLoader create(ContentStorageHandler storageHandler, int cacheTimeMins, int cacheMaxSizeMb) {
         if (cacheTimeMins > 0 && cacheMaxSizeMb > 0) {
-            return new CachedContentLoader(loader, cacheTimeMins, cacheMaxSizeMb);
+            return new CachedContentLoader(storageHandler, cacheTimeMins, cacheMaxSizeMb);
         } else {
-            return new DirectContentLoader(loader);
+            return new DirectContentLoader(storageHandler);
         }
     }
 
@@ -69,13 +69,13 @@ public interface ContentLoader {
     final class CachedContentLoader implements ContentLoader {
         private final AsyncLoadingCache<String, Content> cache;
 
-        CachedContentLoader(ContentStorageHandler loader, int cacheTimeMins, int cacheMaxSizeMb) {
+        CachedContentLoader(ContentStorageHandler storageHandler, int cacheTimeMins, int cacheMaxSizeMb) {
             this.cache = Caffeine.newBuilder()
-                    .executor(loader.getExecutor())
+                    .executor(storageHandler.getExecutor())
                     .expireAfterAccess(cacheTimeMins, TimeUnit.MINUTES)
                     .maximumWeight(cacheMaxSizeMb * Content.MEGABYTE_LENGTH)
                     .weigher((Weigher<String, Content>) (path, content) -> content.getContent().length)
-                    .buildAsync(loader);
+                    .buildAsync(storageHandler);
         }
 
         @Override
@@ -93,11 +93,11 @@ public interface ContentLoader {
      * A {@link ContentLoader} that makes requests directly to the storage handler with no caching.
      */
     final class DirectContentLoader implements ContentLoader {
-        private final ContentStorageHandler loader;
+        private final ContentStorageHandler storageHandler;
         private final Map<String, CompletableFuture<Content>> saveInProgress = new ConcurrentHashMap<>();
 
-        DirectContentLoader(ContentStorageHandler loader) {
-            this.loader = loader;
+        DirectContentLoader(ContentStorageHandler storageHandler) {
+            this.storageHandler = storageHandler;
         }
 
         @Override
@@ -118,7 +118,7 @@ public interface ContentLoader {
                 return saveInProgressFuture;
             }
 
-            return this.loader.asyncLoad(key, this.loader.getExecutor());
+            return this.storageHandler.asyncLoad(key, this.storageHandler.getExecutor());
         }
     }
 

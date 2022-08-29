@@ -26,245 +26,163 @@
 package me.lucko.bytebin.content;
 
 import com.github.benmanes.caffeine.cache.CacheLoader;
+import com.google.common.collect.ImmutableMap;
 
-import me.lucko.bytebin.util.ContentEncoding;
-import me.lucko.bytebin.util.Gzip;
+import me.lucko.bytebin.content.storage.StorageBackend;
 
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
+import org.checkerframework.checker.nullness.qual.NonNull;
 
 import io.prometheus.client.Counter;
 
-import java.io.BufferedInputStream;
-import java.io.BufferedOutputStream;
-import java.io.DataInputStream;
-import java.io.DataOutputStream;
-import java.io.EOFException;
-import java.io.IOException;
-import java.nio.file.DirectoryStream;
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.time.Instant;
-import java.util.concurrent.CompletableFuture;
+import java.util.Collection;
+import java.util.Map;
+import java.util.concurrent.Executor;
 import java.util.concurrent.ScheduledExecutorService;
+import java.util.function.Function;
 
 /**
- * Manages content i/o with the filesystem, including encoding an instance of {@link Content} into
- * a single array of bytes
+ * Coordinates the storage of content in a storage backend.
  */
 public class ContentStorageHandler implements CacheLoader<String, Content> {
 
-    /** Logger instance */
     private static final Logger LOGGER = LogManager.getLogger(ContentStorageHandler.class);
 
-    private static final Counter DISK_READS_COUNTER = Counter.build()
-            .name("bytebin_disk_reads_total")
-            .help("The amount of disk i/o reads")
+    private static final Counter READ_FROM_BACKEND_COUNTER = Counter.build()
+            .name("bytebin_backend_read_total")
+            .labelNames("backend")
+            .help("Counts the number of cache-misses when loading content")
             .register();
 
-    /** Executor service for performing file based i/o */
+    private static final Counter WRITE_TO_BACKEND_COUNTER = Counter.build()
+            .name("bytebin_backend_write_total")
+            .labelNames("backend")
+            .help("Counts the number of times content was written to the backend")
+            .register();
+
+    /** An index of all stored content */
+    private final ContentIndexDatabase index;
+
+    /** The backends in use for content storage */
+    private final Map<String, StorageBackend> backends;
+
+    /** The function used to select which backend to use for content storage */
+    private final StorageBackendSelector backendSelector;
+
+    /** The executor to use for i/o */
     private final ScheduledExecutorService executor;
 
-    // the path to store the content in
-    private final Path contentPath;
-
-    // the housekeeper responsible to deleting expired content and computing metrics
-    private final ContentHousekeeper housekeeper = new ContentHousekeeper();
-
-    public ContentStorageHandler(ScheduledExecutorService executor, Path contentPath) throws IOException {
+    public ContentStorageHandler(ContentIndexDatabase contentIndex, Collection<StorageBackend> backends, StorageBackendSelector backendSelector, ScheduledExecutorService executor) {
+        this.index = contentIndex;
+        this.backends = backends.stream().collect(ImmutableMap.toImmutableMap(
+                StorageBackend::getBackendId, Function.identity()
+        ));
+        this.backendSelector = backendSelector;
         this.executor = executor;
-        this.contentPath = contentPath;
-
-        // make directories
-        Files.createDirectories(this.contentPath);
     }
 
-    public ScheduledExecutorService getExecutor() {
-        return this.executor;
-    }
-
+    /**
+     * Load content.
+     *
+     * @param key the key to load
+     * @return the loaded content
+     */
     @Override
-    public Content load(String path) throws Exception {
-        LOGGER.info("[I/O] Loading " + path + " from disk");
-        DISK_READS_COUNTER.inc();
-
-        // resolve the path within the content dir
-        try {
-            Path resolved = this.contentPath.resolve(path);
-            return load(resolved, false);
-        } catch (Exception e) {
-            LOGGER.error("Exception occurred loading '" + path + "'", e);
-            throw e; // rethrow
-        }
-    }
-
-    private Content load(Path resolved, boolean skipContent) throws IOException {
-        if (!Files.exists(resolved)) {
+    public @NonNull Content load(String key) {
+        // query the index to see if content with this key is stored
+        Content metadata = this.index.get(key);
+        if (metadata == null) {
             return Content.EMPTY_CONTENT;
         }
 
-        try (DataInputStream in = new DataInputStream(new BufferedInputStream(Files.newInputStream(resolved)))) {
-            // read version
-            int version = in.readInt();
+        // find the backend that the content is stored in
+        String backendId = metadata.getBackendId();
 
-            // read key
-            String key = in.readUTF();
-
-            // read content type
-            byte[] contentTypeBytes = new byte[in.readInt()];
-            in.readFully(contentTypeBytes);
-            String contentType = new String(contentTypeBytes);
-
-            // read expiry
-            long expiry = in.readLong();
-            Instant expiryInstant = expiry == -1 ? Instant.MAX : Instant.ofEpochMilli(expiry);
-
-            // read last modified time
-            long lastModified = in.readLong();
-
-            // read modifiable state data
-            boolean modifiable = in.readBoolean();
-            String authKey = null;
-            if (modifiable) {
-                authKey = in.readUTF();
-            }
-
-            // read encoding
-            String encoding;
-            if (version == 1) {
-                encoding = ContentEncoding.GZIP;
-            } else {
-                byte[] encodingBytes = new byte[in.readInt()];
-                in.readFully(encodingBytes);
-                encoding = new String(encodingBytes);
-            }
-
-            // read content
-            byte[] content;
-            if (skipContent) {
-                content = Content.EMPTY_BYTES;
-            } else {
-                content = new byte[in.readInt()];
-                in.readFully(content);
-            }
-
-            return new Content(key, contentType, expiryInstant, lastModified, modifiable, authKey, encoding, content);
-        }
-    }
-
-    public Content loadMeta(Path resolved) throws IOException {
-        return load(resolved, true);
-    }
-
-    public void save(String key, String contentType, byte[] content, Instant expiry, String authKey, boolean requiresCompression, String encoding, CompletableFuture<Content> future) {
-        if (requiresCompression) {
-            content = Gzip.compress(content);
+        StorageBackend backend = this.backends.get(backendId);
+        if (backend == null) {
+            LOGGER.error("Unable to load " + key + " - no such backend '" + backendId + "'");
+            return Content.EMPTY_CONTENT;
         }
 
-        // add directly to the cache
-        // it's quite likely that the file will be requested only a few seconds after it is uploaded
-        Content c = new Content(key, contentType, expiry, System.currentTimeMillis(), authKey != null, authKey, encoding, content);
-        future.complete(c);
+        // increment the read counter
+        READ_FROM_BACKEND_COUNTER.labels(backendId).inc();
+        LOGGER.info("[STORAGE] Loading '" + key + "' from the '" + backendId + "' backend");
 
+        // load the content from the backend
         try {
-            save(c);
-        } finally {
-            c.getSaveFuture().complete(null);
-        }
-    }
-
-    public void save(Content c) {
-        // resolve the path to save at
-        Path path = this.contentPath.resolve(c.getKey());
-
-        try (DataOutputStream out = new DataOutputStream(new BufferedOutputStream(Files.newOutputStream(path)))) {
-            // write version
-            out.writeInt(2);
-
-            // write name
-            out.writeUTF(c.getKey());
-
-            // write content type
-            byte[] contextType = c.getContentType().getBytes();
-            out.writeInt(contextType.length);
-            out.write(contextType);
-
-            // write expiry time
-            out.writeLong(c.getExpiry() == Instant.MAX ? -1 : c.getExpiry().toEpochMilli());
-
-            // write last modified
-            out.writeLong(c.getLastModified());
-
-            // write modifiable state data
-            out.writeBoolean(c.isModifiable());
-            if (c.isModifiable()) {
-                out.writeUTF(c.getAuthKey());
+            Content content = backend.load(key);
+            if (content != null) {
+                return content;
             }
-
-            // write encoding
-            byte[] encoding = c.getEncoding().getBytes();
-            out.writeInt(encoding.length);
-            out.write(encoding);
-
-            // write content
-            out.writeInt(c.getContent().length);
-            out.write(c.getContent());
-        } catch (IOException e) {
-            LOGGER.error("Exception occurred saving '" + path + "'", e);
-        }
-    }
-
-    public void runInvalidationAndRecordMetrics() {
-        try {
-            runInvalidationAndRecordMetrics0();
         } catch (Exception e) {
-            LOGGER.error("Error occurred while invalidating and recording metrics", e);
+            LOGGER.warn("[STORAGE] Unable to load '" + key + "' from the '" + backendId + "' backend", e);
+        }
+
+        return Content.EMPTY_CONTENT;
+    }
+
+    /**
+     * Save content.
+     *
+     * @param content the content to save
+     */
+    public void save(Content content) {
+        // select a backend to store the content in
+        StorageBackend backend = this.backendSelector.select(content);
+        String backendId = backend.getBackendId();
+
+        // record which backend the content is going to be stored in, and write to the index
+        content.setBackendId(backend.getBackendId());
+        this.index.put(content);
+
+        // increment the write counter
+        WRITE_TO_BACKEND_COUNTER.labels(backendId).inc();
+
+        // save to the backend
+        try {
+            backend.save(content);
+        } catch (Exception e) {
+            LOGGER.warn("[STORAGE] Unable to save '" + content.getKey() + "' to the '" + backendId + "' backend", e);
         }
     }
 
-    private void runInvalidationAndRecordMetrics0() {
-        for (ContentHousekeeper.Slice slice : this.housekeeper.getSlicesToProcess()) {
-            slice.begin();
-            int seen = 0;
-            int expired = 0;
+    /**
+     * Invalidates/deletes any expired content and updates the metrics gauges
+     */
+    public void runInvalidationAndRecordMetrics() {
+        // query the index for content which has expired
+        Collection<Content> expired = this.index.getExpired();
 
-            try (DirectoryStream<Path> stream = Files.newDirectoryStream(this.contentPath, slice)) {
-                for (Path path : stream) {
-                    seen++;
+        for (Content metadata : expired) {
+            String key = metadata.getKey();
 
-                    try {
-                        Content content = loadMeta(path);
-                        if (content.shouldExpire()) {
-                            LOGGER.info("[HOUSEKEEPING] Expired: " + path.getFileName().toString());
-                            Files.delete(path);
-                            expired++;
-                            continue;
-                        }
-
-                        slice.record(content.getContentType());
-
-                    } catch (EOFException eof) {
-                        LOGGER.error("[HOUSEKEEPING] Corrupted: " + path.getFileName().toString());
-                        try {
-                            Files.delete(path);
-                        } catch (IOException e) {
-                            // ignore
-                        }
-
-                    } catch (Exception e) {
-                        LOGGER.error("Exception occurred loading meta for '" + path.getFileName().toString() + "'", e);
-                    }
-                }
-
-            } catch (IOException e) {
-                LOGGER.error("Exception thrown while listing directory contents", e);
+            // find the backend that the content is stored in
+            String backendId = metadata.getBackendId();
+            StorageBackend backend = this.backends.get(backendId);
+            if (backend == null) {
+                LOGGER.error("[STORAGE] Unable to delete " + key + " - no such backend '" + backendId + "'");
+                continue;
             }
 
-            LOGGER.info("[HOUSEKEEPING] Expired " + expired + "/" + seen + " files in " + slice);
+            // delete the data from the backend
+            try {
+                backend.delete(key);
+            } catch (Exception e) {
+                LOGGER.warn("[STORAGE] Unable to delete '" + key + "' from the '" + backend.getBackendId() + "' backend", e);
+            }
 
-            slice.done();
+            // remove the entry from the index
+            this.index.remove(key);
+
+            LOGGER.info("[STORAGE] Deleted '" + key + "' from the '" + backendId + "' backend");
         }
 
-        this.housekeeper.updateMetrics();
+        // update metrics
+        this.index.recordMetrics();
+    }
+
+    public Executor getExecutor() {
+        return this.executor;
     }
 }

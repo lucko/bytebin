@@ -28,8 +28,13 @@ package me.lucko.bytebin;
 import com.google.common.util.concurrent.ThreadFactoryBuilder;
 
 import me.lucko.bytebin.content.Content;
+import me.lucko.bytebin.content.ContentIndexDatabase;
 import me.lucko.bytebin.content.ContentLoader;
 import me.lucko.bytebin.content.ContentStorageHandler;
+import me.lucko.bytebin.content.StorageBackendSelector;
+import me.lucko.bytebin.content.storage.LocalDiskBackend;
+import me.lucko.bytebin.content.storage.S3Backend;
+import me.lucko.bytebin.content.storage.StorageBackend;
 import me.lucko.bytebin.http.BytebinServer;
 import me.lucko.bytebin.util.Configuration;
 import me.lucko.bytebin.util.Configuration.Option;
@@ -50,6 +55,8 @@ import io.jooby.Jooby;
 import io.prometheus.client.hotspot.DefaultExports;
 
 import java.nio.file.Paths;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
@@ -75,12 +82,18 @@ public final class Bytebin implements AutoCloseable {
 
         // setup a new bytebin instance
         Configuration config = Configuration.load(Paths.get("config.json"));
-        Bytebin bytebin = new Bytebin(config);
-        Runtime.getRuntime().addShutdownHook(new Thread(bytebin::close, "Bytebin Shutdown Thread"));
+        try {
+            Bytebin bytebin = new Bytebin(config);
+            Runtime.getRuntime().addShutdownHook(new Thread(bytebin::close, "Bytebin Shutdown Thread"));
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
     }
 
     /** Executor service for performing file based i/o */
     private final ScheduledExecutorService executor;
+
+    private final ContentIndexDatabase indexDatabase;
 
     /** The web server instance */
     private final BytebinServer server;
@@ -96,15 +109,36 @@ public final class Bytebin implements AutoCloseable {
                 new ThreadFactoryBuilder().setNameFormat("bytebin-io-%d").build()
         );
 
-        // setup loader
-        ContentStorageHandler contentStorageHandler = new ContentStorageHandler(
-                this.executor,
-                Paths.get("content")
-        );
+        // setup storage backends
+        List<StorageBackend> storageBackends = new ArrayList<>();
 
-        // build content loader
+        LocalDiskBackend localDiskBackend = new LocalDiskBackend("local", Paths.get("content"));
+        storageBackends.add(localDiskBackend);
+
+        StorageBackendSelector backendSelector;
+        if (config.getBoolean(Option.S3, false)) {
+            S3Backend s3Backend = new S3Backend("s3", config.getString(Option.S3_BUCKET, "bytebin"));
+            storageBackends.add(s3Backend);
+
+            backendSelector = new StorageBackendSelector.IfExpiryGt(
+                    config.getInt(Option.S3_EXPIRY_THRESHOLD, 2880), // 2 days
+                    s3Backend,
+                    new StorageBackendSelector.IfSizeGt(
+                            config.getInt(Option.S3_SIZE_THRESHOLD, 100) * Content.KILOBYTE_LENGTH, // 100kb
+                            s3Backend,
+                            new StorageBackendSelector.Static(localDiskBackend)
+                    )
+            );
+        } else {
+            backendSelector = new StorageBackendSelector.Static(localDiskBackend);
+        }
+
+        this.indexDatabase = ContentIndexDatabase.initialise(storageBackends);
+
+        ContentStorageHandler storageHandler = new ContentStorageHandler(this.indexDatabase, storageBackends, backendSelector, this.executor);
+
         ContentLoader contentLoader = ContentLoader.create(
-                contentStorageHandler,
+                storageHandler,
                 config.getInt(Option.CACHE_EXPIRY, 10),
                 config.getInt(Option.CACHE_MAX_SIZE, 200)
         );
@@ -121,7 +155,7 @@ public final class Bytebin implements AutoCloseable {
 
         // setup the web server
         this.server = (BytebinServer) Jooby.createApp(new String[0], ExecutionMode.EVENT_LOOP, () -> new BytebinServer(
-                contentStorageHandler,
+                storageHandler,
                 contentLoader,
                 config.getString(Option.HOST, "0.0.0.0"),
                 config.getInt(Option.PORT, 8080),
@@ -150,7 +184,7 @@ public final class Bytebin implements AutoCloseable {
 
         // schedule invalidation task
         if (expiryHandler.hasExpiryTimes() || metrics) {
-            this.executor.scheduleWithFixedDelay(contentStorageHandler::runInvalidationAndRecordMetrics, 5, 30, TimeUnit.SECONDS);
+            this.executor.scheduleWithFixedDelay(storageHandler::runInvalidationAndRecordMetrics, 5, 60 * 5, TimeUnit.SECONDS);
         }
     }
 
@@ -162,6 +196,11 @@ public final class Bytebin implements AutoCloseable {
             this.executor.awaitTermination(30, TimeUnit.SECONDS);
         } catch (InterruptedException e) {
             LOGGER.error("Exception whilst shutting down executor", e);
+        }
+        try {
+            this.indexDatabase.close();
+        } catch (Exception e) {
+            LOGGER.error("Exception whilst shutting down index database", e);
         }
     }
 
