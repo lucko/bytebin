@@ -173,14 +173,21 @@ public final class PostHandler implements Route.Handler {
 
         // return the url location as plain content
         ctx.setResponseCode(StatusCode.CREATED);
-        ctx.setResponseHeader("Location", key);
 
         if (allowModifications) {
             ctx.setResponseHeader("Modification-Key", authKey);
         }
 
-        ctx.setResponseType(MediaType.JSON);
-        return "{\"key\":\"" + key + "\"}";
+        if (ctx.getMethod().equals("PUT")) {
+            String location = "https://" + ctx.getHostAndPort() + "/" + key;
+            ctx.setResponseHeader("Location", location);
+            ctx.setResponseType(MediaType.TEXT);
+            return location + "\n";
+        } else {
+            ctx.setResponseHeader("Location", key);
+            ctx.setResponseType(MediaType.JSON);
+            return "{\"key\":\"" + key + "\"}";
+        }
     }
 
 }

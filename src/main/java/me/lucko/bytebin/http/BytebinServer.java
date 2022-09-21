@@ -117,10 +117,12 @@ public class BytebinServer extends Jooby {
             decorator(new CorsHandler(new Cors()
                     .setUseCredentials(false)
                     .setMaxAge(Duration.ofDays(1))
-                    .setMethods("POST")
+                    .setMethods("POST", "PUT")
                     .setHeaders("Content-Type", "Accept", "Origin", "Content-Encoding", "Allow-Modification")));
 
-            post("/post", new PostHandler(this, postRateLimiter, rateLimitHandler, storageHandler, contentLoader, contentTokenGenerator, maxContentLength, expiryHandler));
+            PostHandler postHandler = new PostHandler(this, postRateLimiter, rateLimitHandler, storageHandler, contentLoader, contentTokenGenerator, maxContentLength, expiryHandler);
+            post("/post", postHandler);
+            put("/post", postHandler);
         });
 
         routes(() -> {
