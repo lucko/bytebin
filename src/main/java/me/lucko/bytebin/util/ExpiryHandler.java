@@ -66,10 +66,17 @@ public final class ExpiryHandler {
      *
      * @param userAgent the user agent of the client that posted the content
      * @param origin the origin of the client that posted the content
+     * @param host the host that was used when posting the content
      * @return the expiry time, or {@link Instant#MAX} if it should never expire
      */
-    public Date getExpiry(String userAgent, String origin) {
-        Duration duration = this.specificLifetimes.getOrDefault(userAgent, this.specificLifetimes.getOrDefault(origin, this.defaultLifetime));
+    public Date getExpiry(String userAgent, String origin, String host) {
+        Duration duration = this.specificLifetimes.getOrDefault(userAgent,
+                this.specificLifetimes.getOrDefault(origin,
+                        this.specificLifetimes.getOrDefault(host,
+                                this.defaultLifetime
+                        )
+                )
+        );
         if (duration.isZero()) {
             return null;
         }

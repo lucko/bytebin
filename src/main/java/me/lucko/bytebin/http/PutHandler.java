@@ -133,8 +133,9 @@ public final class PutHandler implements Route.Handler {
             // get the user agent & origin headers
             String userAgent = ctx.header("User-Agent").value("null");
             String origin = ctx.header("Origin").value("null");
+            String host = ctx.getHostAndPort();
 
-            Date newExpiry = this.expiryHandler.getExpiry(userAgent, origin);
+            Date newExpiry = this.expiryHandler.getExpiry(userAgent, origin, host);
 
             LOGGER.info("[PUT]\n" +
                     "    key = " + path + "\n" +

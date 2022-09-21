@@ -113,8 +113,9 @@ public final class PostHandler implements Route.Handler {
         // get the user agent & origin headers
         String userAgent = ctx.header("User-Agent").value("null");
         String origin = ctx.header("Origin").value("null");
+        String host = ctx.getHostAndPort();
 
-        Date expiry = this.expiryHandler.getExpiry(userAgent, origin);
+        Date expiry = this.expiryHandler.getExpiry(userAgent, origin, host);
 
         // check max content length
         if (content.length > this.maxContentLength) {
@@ -183,7 +184,6 @@ public final class PostHandler implements Route.Handler {
 
         if (ctx.getMethod().equals("PUT")) {
             // PUT: return the URL where the content can be accessed
-            String host = ctx.getHostAndPort();
             host = this.hostAliases.getOrDefault(host, host);
             String location = "https://" + host + "/" + key;
 
