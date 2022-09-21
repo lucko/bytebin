@@ -47,6 +47,7 @@ import io.prometheus.client.Summary;
 
 import java.util.Date;
 import java.util.List;
+import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 
 import javax.annotation.Nonnull;
@@ -72,8 +73,9 @@ public final class PostHandler implements Route.Handler {
     private final TokenGenerator authKeyTokenGenerator;
     private final long maxContentLength;
     private final ExpiryHandler expiryHandler;
+    private final Map<String, String> hostAliases;
 
-    public PostHandler(BytebinServer server, RateLimiter rateLimiter, RateLimitHandler rateLimitHandler, ContentStorageHandler storageHandler, ContentLoader contentLoader, TokenGenerator contentTokenGenerator, long maxContentLength, ExpiryHandler expiryHandler) {
+    public PostHandler(BytebinServer server, RateLimiter rateLimiter, RateLimitHandler rateLimitHandler, ContentStorageHandler storageHandler, ContentLoader contentLoader, TokenGenerator contentTokenGenerator, long maxContentLength, ExpiryHandler expiryHandler, Map<String, String> hostAliases) {
         this.server = server;
         this.rateLimiter = rateLimiter;
         this.rateLimitHandler = rateLimitHandler;
@@ -83,6 +85,7 @@ public final class PostHandler implements Route.Handler {
         this.authKeyTokenGenerator = new TokenGenerator(32);
         this.maxContentLength = maxContentLength;
         this.expiryHandler = expiryHandler;
+        this.hostAliases = hostAliases;
     }
 
     @Override
@@ -179,11 +182,16 @@ public final class PostHandler implements Route.Handler {
         }
 
         if (ctx.getMethod().equals("PUT")) {
-            String location = "https://" + ctx.getHostAndPort() + "/" + key;
+            // PUT: return the URL where the content can be accessed
+            String host = ctx.getHostAndPort();
+            host = this.hostAliases.getOrDefault(host, host);
+            String location = "https://" + host + "/" + key;
+
             ctx.setResponseHeader("Location", location);
             ctx.setResponseType(MediaType.TEXT);
             return location + "\n";
         } else {
+            // POST: return the key
             ctx.setResponseHeader("Location", key);
             ctx.setResponseType(MediaType.JSON);
             return "{\"key\":\"" + key + "\"}";

@@ -102,6 +102,21 @@ public class Configuration {
         return get(option, def, Boolean::parseBoolean, JsonElement::getAsBoolean);
     }
 
+    public Map<String, String> getStringMap(Option option) {
+        return get(option, ImmutableMap.of(),
+                str -> Splitter.on(',').withKeyValueSeparator('=').split(str).entrySet().stream()
+                        .collect(ImmutableMap.toImmutableMap(
+                                ent -> ent.getKey().trim(),
+                                ent -> ent.getValue().trim()
+                        )),
+                ele -> ele.getAsJsonObject().entrySet().stream()
+                        .collect(ImmutableMap.toImmutableMap(
+                                Map.Entry::getKey,
+                                ent -> ent.getValue().getAsString()
+                        ))
+        );
+    }
+
     public Map<String, Long> getLongMap(Option option) {
         return get(option, ImmutableMap.of(),
                 str -> Splitter.on(',').withKeyValueSeparator('=').split(str).entrySet().stream()
@@ -132,6 +147,7 @@ public class Configuration {
 
         HOST("host", "bytebin.http.host"),
         PORT("port", "bytebin.http.port"),
+        HTTP_HOST_ALIASES("httpHostAliases", "bytebin.http.hostaliases"),
 
         METRICS("metricsEnabled", "bytebin.metrics.enabled"),
 
