@@ -66,10 +66,16 @@ public class ContentIndexDatabase implements AutoCloseable {
 
     private static final Logger LOGGER = LogManager.getLogger(ContentIndexDatabase.class);
 
-    private static final Gauge STORED_CONTENT_GAUGE = Gauge.build()
+    private static final Gauge STORED_CONTENT_AMOUNT_GAUGE = Gauge.build()
             .name("bytebin_content")
             .help("The amount of stored content")
-            .labelNames("type")
+            .labelNames("type", "backend")
+            .register();
+
+    private static final Gauge STORED_CONTENT_SIZE_GAUGE = Gauge.build()
+            .name("bytebin_content_size")
+            .help("The size of stored content")
+            .labelNames("type", "backend")
             .register();
 
     public static ContentIndexDatabase initialise(Collection<StorageBackend> backends) throws SQLException {
@@ -157,17 +163,20 @@ public class ContentIndexDatabase implements AutoCloseable {
         }
     }
 
-    public Map<String, Integer> getCountsByContentType() {
+    record ContentStorageKeys(String contentType, String backend) { }
+
+    private Map<ContentStorageKeys, Long> queryStringToIntMap(String returnExpr) {
         try {
-            Map<String, Integer> map = new HashMap<>();
+            Map<ContentStorageKeys, Long> map = new HashMap<>();
             try (GenericRawResults<Object[]> results = this.dao.queryRaw(
-                    "SELECT content_type, count(*) FROM content GROUP BY content_type",
-                    new DataType[]{DataType.STRING, DataType.INTEGER}
+                    "SELECT content_type, backend_id, " + returnExpr + " FROM content GROUP BY content_type, backend_id",
+                    new DataType[]{DataType.STRING, DataType.STRING, DataType.LONG}
             )) {
                 for (Object[] result : results) {
                     String contentType = (String) result[0];
-                    int count = (int) result[1];
-                    map.put(contentType, count);
+                    String backend = (String) result[1];
+                    long value = (long) result[2];
+                    map.put(new ContentStorageKeys(contentType, backend), value);
                 }
             }
             return map;
@@ -178,8 +187,11 @@ public class ContentIndexDatabase implements AutoCloseable {
     }
 
     public void recordMetrics() {
-        Map<String, Integer> sum = getCountsByContentType();
-        sum.forEach((contentType, count) -> STORED_CONTENT_GAUGE.labels(contentType).set(count));
+        Map<ContentStorageKeys, Long> contentTypeToCount = queryStringToIntMap("count(*)");
+        contentTypeToCount.forEach((keys, count) -> STORED_CONTENT_AMOUNT_GAUGE.labels(keys.contentType(), keys.backend()).set(count));
+
+        Map<ContentStorageKeys, Long> contentTypeToSize = queryStringToIntMap("sum(content_length)");
+        contentTypeToSize.forEach((keys, size) -> STORED_CONTENT_SIZE_GAUGE.labels(keys.contentType(), keys.backend()).set(size));
     }
 
     @Override
