@@ -1,9 +1,15 @@
-<h3 align="center"><img src="https://i.imgur.com/0dofgB4.png"></h3>
-<h1 align="center">bytebin</h1>
+<h1 align="center">
+	<img
+		alt="bytebin"
+		src="https://i.imgur.com/XBxNheI.png">
+</h1>
 
-bytebin is a fast & lightweight content storage web service.
+<h3 align="center">
+  bytebin is a fast & lightweight content storage web service.
+</h3>
 
-You can think of it a bit like a [pastebin](https://en.wikipedia.org/wiki/Pastebin), except that it accepts any kind of data (not just plain text!). Accordingly, the name 'bytebin' is a portmanteau of "byte" (binary) and "pastebin".
+You can think of bytebin a bit like a [pastebin](https://en.wikipedia.org/wiki/Pastebin), except that it accepts any kind of data (not just plain text!).  
+Accordingly, the name 'bytebin' is a portmanteau of "byte" (binary) and "pastebin".
 
 bytebin is:
 
