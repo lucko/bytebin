@@ -66,6 +66,13 @@ public interface StorageBackendSelector {
             this.backend = backend;
         }
 
+        /**
+         * Select a backend for the provided content. This will {@link #test(Content)} the provided content
+         * and select a backend based off of that.
+         *
+         * @param content the content to select a backend for
+         * @return the backend to store the content to
+         */
         @Override
         public StorageBackend select(Content content) {
             if (test(content)) {
@@ -74,6 +81,12 @@ public interface StorageBackendSelector {
             return this.next.select(content);
         }
 
+        /**
+         * Test whether this selector's backend can be used to store the provided content.
+         *
+         * @param content the content to test
+         * @return true if this selector's backend can be used
+         */
         protected abstract boolean test(Content content);
     }
 
@@ -87,7 +100,7 @@ public interface StorageBackendSelector {
 
         @Override
         protected boolean test(Content content) {
-            return content.getContentLength() > this.threshold;
+            return content.getContentLength() < this.threshold;
         }
     }
 
@@ -107,7 +120,7 @@ public interface StorageBackendSelector {
             }
 
             long timeToExpiry = Duration.between(Instant.now(), expiry.toInstant()).getSeconds() / 60;
-            return timeToExpiry > this.threshold;
+            return timeToExpiry < this.threshold;
         }
     }
 
