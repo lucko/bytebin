@@ -46,6 +46,7 @@ import java.time.Instant;
 import java.util.List;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
+import java.util.stream.Collectors;
 
 import javax.annotation.Nonnull;
 
@@ -79,13 +80,14 @@ public final class GetHandler implements Route.Handler {
 
         // get the encodings supported by the requester
         // https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/Accept-Encoding
-        Set<String> supportedEncodings = ContentEncoding.getAcceptedEncoding(ctx);
+        Set<String> acceptedEncoding = ContentEncoding.getAcceptedEncoding(ctx);
 
         String origin = ctx.header("Origin").valueOrNull();
         LOGGER.info("[REQUEST]\n" +
                 "    key = " + path + "\n" +
                 "    user agent = " + ctx.header("User-Agent").value("null") + "\n" +
                 "    ip = " + ipAddress + "\n" +
+                "    accept encoding = " + String.join(", ", acceptedEncoding) + "\n" +
                 (origin == null ? "" : "    origin = " + origin + "\n")
         );
 
@@ -109,11 +111,15 @@ public final class GetHandler implements Route.Handler {
             List<String> contentEncodingStrings = ContentEncoding.getContentEncoding(content.getEncoding());
 
             // requester supports the used content encoding, just serve as-is
-            if (supportedEncodings.contains("*") || supportedEncodings.containsAll(contentEncodingStrings)) {
+            if (acceptedEncoding.contains("*") || acceptedEncoding.containsAll(contentEncodingStrings)) {
                 ctx.setResponseHeader("Content-Encoding", content.getEncoding());
                 ctx.setResponseType(MediaType.valueOf(content.getContentType()));
                 return content.getContent();
             }
+
+            LOGGER.warn("[REQUEST] Request for 'key = " + path + "' was made with incompatible Accept-Encoding headers! " +
+                    "Content-Encoding = '" + String.join(", ", contentEncodingStrings) + "' - " +
+                    "Accept-Encoding = '" + String.join(", ", acceptedEncoding) + "'");
 
             // if it's compressed using gzip, we will uncompress on the server side
             if (contentEncodingStrings.size() == 1 && contentEncodingStrings.get(0).equals(ContentEncoding.GZIP)) {
