@@ -46,6 +46,7 @@ import java.time.Instant;
 import java.util.List;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
+import java.util.stream.Collectors;
 
 import javax.annotation.Nonnull;
 
@@ -79,7 +80,7 @@ public final class GetHandler implements Route.Handler {
 
         // get the encodings supported by the requester
         // https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/Accept-Encoding
-        Set<String> supportedEncodings = ContentEncoding.getAcceptedEncoding(ctx);
+        Set<String> acceptedEncoding = ContentEncoding.getAcceptedEncoding(ctx);
 
         String origin = ctx.header("Origin").valueOrNull();
         LOGGER.info("[REQUEST]\n" +
@@ -100,20 +101,34 @@ public final class GetHandler implements Route.Handler {
 
             ctx.setResponseHeader("Last-Modified", Instant.ofEpochMilli(content.getLastModified()));
 
+            // Cache-Control: no-transform   instructs caches (e.g. cloudflare) to not transform the content
+            //                               Since bytebin will almost always serve the content already compressed,
+            //                               there is no reason for the cache to try to transform/uncompress/recompress it.
+            //                               (in fact it is likely that this process will decrease loading speed)
+            //
+            // Cache-Control: immutable      the content will never change, caches can more aggressively cache the content
+            //                               without needing to revalidate.
+
             if (content.isModifiable()) {
-                ctx.setResponseHeader("Cache-Control", "no-cache");
+                // cache assets in proxy caches but require revalidation by the proxy when served
+                ctx.setResponseHeader("Cache-Control", "public, no-cache, proxy-revalidate, no-transform");
             } else {
-                ctx.setResponseHeader("Cache-Control", "public, max-age=604800");
+                // cache effectively forever
+                ctx.setResponseHeader("Cache-Control", "public, max-age=604800, no-transform, immutable");
             }
 
             List<String> contentEncodingStrings = ContentEncoding.getContentEncoding(content.getEncoding());
 
             // requester supports the used content encoding, just serve as-is
-            if (supportedEncodings.contains("*") || supportedEncodings.containsAll(contentEncodingStrings)) {
+            if (acceptedEncoding.contains("*") || acceptedEncoding.containsAll(contentEncodingStrings)) {
                 ctx.setResponseHeader("Content-Encoding", content.getEncoding());
                 ctx.setResponseType(MediaType.valueOf(content.getContentType()));
                 return content.getContent();
             }
+
+            LOGGER.warn("[REQUEST] Request for 'key = " + path + "' was made with incompatible Accept-Encoding headers! " +
+                    "Content-Encoding = " + contentEncodingStrings + ", " +
+                    "Accept-Encoding = " + acceptedEncoding + "");
 
             // if it's compressed using gzip, we will uncompress on the server side
             if (contentEncodingStrings.size() == 1 && contentEncodingStrings.get(0).equals(ContentEncoding.GZIP)) {
