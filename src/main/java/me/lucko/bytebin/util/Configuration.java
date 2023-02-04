@@ -150,6 +150,7 @@ public class Configuration {
         HTTP_HOST_ALIASES("httpHostAliases", "bytebin.http.hostaliases"),
 
         METRICS("metricsEnabled", "bytebin.metrics.enabled"),
+        AUDIT_ON_STARTUP("startupAudit", "bytebin.startup.audit"),
 
         KEY_LENGTH("keyLength", "bytebin.misc.keylength"),
         EXECUTOR_POOL_SIZE("corePoolSize", "bytebin.misc.corepoolsize"),
