@@ -61,7 +61,7 @@ public class AuditTask implements Runnable {
             String backendId = backend.getBackendId();
 
             LOGGER.info("[AUDIT] Listing content for backend {}", backendId);
-            List<String> keys = backend.list().map(Content::getKey).toList();
+            List<String> keys = backend.listKeys().toList();
             LOGGER.info("[AUDIT] Found {} entries for backend {}", keys.size(), backendId);
 
             List<String> keysToDelete = keys.stream()

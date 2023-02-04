@@ -98,6 +98,11 @@ public class LocalDiskBackend implements StorageBackend {
     }
 
     @Override
+    public Stream<String> listKeys() throws Exception {
+        return Files.list(this.contentPath).map(path -> path.getFileName().toString());
+    }
+
+    @Override
     public Stream<Content> list() throws IOException {
         return Files.list(this.contentPath)
                 .map(path -> {

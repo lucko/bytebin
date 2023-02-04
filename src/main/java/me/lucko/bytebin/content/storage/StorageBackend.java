@@ -67,6 +67,14 @@ public interface StorageBackend {
     void delete(String key) throws Exception;
 
     /**
+     * Lists the keys for all content stored in the backend.
+     *
+     * @return a list of keys
+     * @throws Exception catch all
+     */
+    Stream<String> listKeys() throws Exception;
+
+    /**
      * Lists metadata about all the content stored in the backend. (doesn't load the actual data).
      * Used primarily if the index needs to be rebuilt.
      *
