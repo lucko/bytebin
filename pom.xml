@@ -139,11 +139,6 @@
             <artifactId>sqlite-jdbc</artifactId>
             <version>3.39.2.1</version>
         </dependency>
-        <dependency>
-            <groupId>com.zaxxer</groupId>
-            <artifactId>HikariCP</artifactId>
-            <version>5.0.1</version>
-        </dependency>
 
         <dependency>
             <groupId>software.amazon.awssdk</groupId>

@@ -29,12 +29,9 @@ import com.j256.ormlite.dao.Dao;
 import com.j256.ormlite.dao.DaoManager;
 import com.j256.ormlite.dao.GenericRawResults;
 import com.j256.ormlite.field.DataType;
-import com.j256.ormlite.jdbc.DataSourceConnectionSource;
-import com.j256.ormlite.jdbc.db.SqliteDatabaseType;
+import com.j256.ormlite.jdbc.JdbcConnectionSource;
 import com.j256.ormlite.support.ConnectionSource;
 import com.j256.ormlite.table.TableUtils;
-import com.zaxxer.hikari.HikariConfig;
-import com.zaxxer.hikari.HikariDataSource;
 
 import me.lucko.bytebin.content.storage.StorageBackend;
 
@@ -102,17 +99,11 @@ public class ContentIndexDatabase implements AutoCloseable {
         return database;
     }
 
-    private final HikariDataSource dataSource;
     private final ConnectionSource connectionSource;
     private final Dao<Content, String> dao;
 
     public ContentIndexDatabase() throws SQLException {
-        HikariConfig hikariConfig = new HikariConfig();
-        hikariConfig.setJdbcUrl("jdbc:sqlite:db/bytebin.db");
-
-        this.dataSource = new HikariDataSource(hikariConfig);
-
-        this.connectionSource = new DataSourceConnectionSource(this.dataSource, new SqliteDatabaseType());
+        this.connectionSource = new JdbcConnectionSource("jdbc:sqlite:db/bytebin.db");
         TableUtils.createTableIfNotExists(this.connectionSource, Content.class);
         this.dao = DaoManager.createDao(this.connectionSource, Content.class);
     }
@@ -197,6 +188,5 @@ public class ContentIndexDatabase implements AutoCloseable {
     @Override
     public void close() throws Exception {
         this.connectionSource.close();
-        this.dataSource.close();
     }
 }
