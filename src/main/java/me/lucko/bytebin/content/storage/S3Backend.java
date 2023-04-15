@@ -33,6 +33,7 @@ import org.apache.logging.log4j.Logger;
 import software.amazon.awssdk.core.ResponseInputStream;
 import software.amazon.awssdk.core.sync.RequestBody;
 import software.amazon.awssdk.services.s3.S3Client;
+import software.amazon.awssdk.services.s3.S3ClientBuilder;
 import software.amazon.awssdk.services.s3.model.DeleteObjectRequest;
 import software.amazon.awssdk.services.s3.model.GetObjectRequest;
 import software.amazon.awssdk.services.s3.model.GetObjectResponse;
@@ -44,6 +45,7 @@ import software.amazon.awssdk.services.s3.model.PutObjectRequest;
 import software.amazon.awssdk.services.s3.model.S3Object;
 import software.amazon.awssdk.services.s3.paginators.ListObjectsV2Iterable;
 
+import java.net.URI;
 import java.util.Date;
 import java.util.HashMap;
 import java.util.Map;
@@ -68,7 +70,14 @@ public class S3Backend implements StorageBackend {
         this.bucketName = bucketName;
 
         // configure with environment variables: AWS_REGION, AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY
-        this.client = S3Client.builder().build();
+        S3ClientBuilder builder = S3Client.builder();
+
+        String s3EndpointUrl = System.getenv("AWS_S3_ENDPOINT_URL");
+        if (s3EndpointUrl != null && !s3EndpointUrl.isBlank()) {
+            builder = builder.endpointOverride(URI.create(s3EndpointUrl));
+        }
+
+        this.client = builder.build();
     }
 
     @Override
