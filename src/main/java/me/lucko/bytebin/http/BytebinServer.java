@@ -25,17 +25,6 @@
 
 package me.lucko.bytebin.http;
 
-import me.lucko.bytebin.Bytebin;
-import me.lucko.bytebin.content.ContentLoader;
-import me.lucko.bytebin.content.ContentStorageHandler;
-import me.lucko.bytebin.util.ExpiryHandler;
-import me.lucko.bytebin.util.RateLimitHandler;
-import me.lucko.bytebin.util.RateLimiter;
-import me.lucko.bytebin.util.TokenGenerator;
-
-import org.apache.logging.log4j.LogManager;
-import org.apache.logging.log4j.Logger;
-
 import io.jooby.AssetHandler;
 import io.jooby.AssetSource;
 import io.jooby.Context;
@@ -48,9 +37,20 @@ import io.jooby.ServerOptions;
 import io.jooby.StatusCode;
 import io.jooby.exception.StatusCodeException;
 import io.prometheus.client.Counter;
+import me.lucko.bytebin.Bytebin;
+import me.lucko.bytebin.content.ContentLoader;
+import me.lucko.bytebin.content.ContentStorageHandler;
+import me.lucko.bytebin.http.admin.BulkDeleteHandler;
+import me.lucko.bytebin.util.ExpiryHandler;
+import me.lucko.bytebin.util.RateLimitHandler;
+import me.lucko.bytebin.util.RateLimiter;
+import me.lucko.bytebin.util.TokenGenerator;
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
 
 import java.time.Duration;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.CompletionException;
 
 public class BytebinServer extends Jooby {
@@ -64,7 +64,7 @@ public class BytebinServer extends Jooby {
             .labelNames("method", "useragent")
             .register();
 
-    public BytebinServer(ContentStorageHandler storageHandler, ContentLoader contentLoader, String host, int port, boolean metrics, RateLimitHandler rateLimitHandler, RateLimiter postRateLimiter, RateLimiter putRateLimiter, RateLimiter readRateLimiter, TokenGenerator contentTokenGenerator, long maxContentLength, ExpiryHandler expiryHandler, Map<String, String> hostAliases) {
+    public BytebinServer(ContentStorageHandler storageHandler, ContentLoader contentLoader, String host, int port, boolean metrics, RateLimitHandler rateLimitHandler, RateLimiter postRateLimiter, RateLimiter putRateLimiter, RateLimiter readRateLimiter, TokenGenerator contentTokenGenerator, long maxContentLength, ExpiryHandler expiryHandler, Map<String, String> hostAliases, Set<String> adminApiKeys) {
         ServerOptions serverOpts = new ServerOptions();
         serverOpts.setHost(host);
         serverOpts.setPort(port);
@@ -135,6 +135,10 @@ public class BytebinServer extends Jooby {
 
             get("/{id:[a-zA-Z0-9]+}", new GetHandler(this, readRateLimiter, rateLimitHandler, contentLoader));
             put("/{id:[a-zA-Z0-9]+}", new PutHandler(this, putRateLimiter, rateLimitHandler, storageHandler, contentLoader, maxContentLength, expiryHandler));
+        });
+
+        routes(() -> {
+            post("/admin/bulkdelete", new BulkDeleteHandler(this, storageHandler, adminApiKeys));
         });
     }
 

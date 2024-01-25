@@ -25,6 +25,12 @@
 
 package me.lucko.bytebin.http;
 
+import io.jooby.Context;
+import io.jooby.MediaType;
+import io.jooby.Route;
+import io.jooby.StatusCode;
+import io.jooby.exception.StatusCodeException;
+import io.prometheus.client.Summary;
 import me.lucko.bytebin.content.Content;
 import me.lucko.bytebin.content.ContentLoader;
 import me.lucko.bytebin.content.ContentStorageHandler;
@@ -34,23 +40,14 @@ import me.lucko.bytebin.util.Gzip;
 import me.lucko.bytebin.util.RateLimitHandler;
 import me.lucko.bytebin.util.RateLimiter;
 import me.lucko.bytebin.util.TokenGenerator;
-
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
-import io.jooby.Context;
-import io.jooby.MediaType;
-import io.jooby.Route;
-import io.jooby.StatusCode;
-import io.jooby.exception.StatusCodeException;
-import io.prometheus.client.Summary;
-
+import javax.annotation.Nonnull;
 import java.util.Date;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
-
-import javax.annotation.Nonnull;
 
 public final class PostHandler implements Route.Handler {
 

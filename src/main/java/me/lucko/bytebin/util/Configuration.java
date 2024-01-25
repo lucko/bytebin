@@ -167,7 +167,8 @@ public class Configuration {
         CACHE_EXPIRY("cacheExpiryMinutes", "bytebin.cache.expiry"), // minutes
         CACHE_MAX_SIZE("cacheMaxSizeMb", "bytebin.cache.maxsize"), // mb
 
-        API_KEYS("apiKeys", "bytebin.ratelimit.apikeys"), // list
+        RATELIMIT_API_KEYS("apiKeys", "bytebin.ratelimit.apikeys"), // list
+        ADMIN_API_KEYS("adminApiKeys", "bytebin.admin.apikeys"), // list
 
         POST_RATE_LIMIT_PERIOD("postRateLimitPeriodMins", "bytebin.ratelimit.post.period"), // minutes
         POST_RATE_LIMIT("postRateLimit", "bytebin.ratelimit.post.amount"),

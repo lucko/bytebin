@@ -26,7 +26,6 @@
 package me.lucko.bytebin.util;
 
 import com.google.common.base.Splitter;
-
 import io.jooby.Context;
 
 import java.util.ArrayList;

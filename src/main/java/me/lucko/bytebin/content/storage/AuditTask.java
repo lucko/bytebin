@@ -25,9 +25,7 @@
 
 package me.lucko.bytebin.content.storage;
 
-import me.lucko.bytebin.content.Content;
 import me.lucko.bytebin.content.ContentIndexDatabase;
-
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 

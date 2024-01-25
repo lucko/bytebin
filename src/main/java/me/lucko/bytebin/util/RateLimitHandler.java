@@ -26,7 +26,6 @@
 package me.lucko.bytebin.util;
 
 import com.google.common.collect.ImmutableSet;
-
 import io.jooby.Context;
 import io.jooby.StatusCode;
 import io.jooby.exception.StatusCodeException;

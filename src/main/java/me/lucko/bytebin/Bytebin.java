@@ -25,8 +25,11 @@
 
 package me.lucko.bytebin;
 
+import com.google.common.collect.ImmutableSet;
 import com.google.common.util.concurrent.ThreadFactoryBuilder;
-
+import io.jooby.ExecutionMode;
+import io.jooby.Jooby;
+import io.prometheus.client.hotspot.DefaultExports;
 import me.lucko.bytebin.content.Content;
 import me.lucko.bytebin.content.ContentIndexDatabase;
 import me.lucko.bytebin.content.ContentLoader;
@@ -45,15 +48,10 @@ import me.lucko.bytebin.util.ExpiryHandler;
 import me.lucko.bytebin.util.RateLimitHandler;
 import me.lucko.bytebin.util.RateLimiter;
 import me.lucko.bytebin.util.TokenGenerator;
-
 import org.apache.logging.log4j.Level;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.apache.logging.log4j.io.IoBuilder;
-
-import io.jooby.ExecutionMode;
-import io.jooby.Jooby;
-import io.prometheus.client.hotspot.DefaultExports;
 
 import java.nio.file.Paths;
 import java.util.ArrayList;
@@ -161,7 +159,7 @@ public final class Bytebin implements AutoCloseable {
                 config.getString(Option.HOST, "0.0.0.0"),
                 config.getInt(Option.PORT, 8080),
                 metrics,
-                new RateLimitHandler(config.getStringList(Option.API_KEYS)),
+                new RateLimitHandler(config.getStringList(Option.RATELIMIT_API_KEYS)),
                 new RateLimiter(
                         // by default, allow posts at a rate of 30 times every 10 minutes (every 20s)
                         config.getInt(Option.POST_RATE_LIMIT_PERIOD, 10),
@@ -180,7 +178,8 @@ public final class Bytebin implements AutoCloseable {
                 new TokenGenerator(config.getInt(Option.KEY_LENGTH, 7)),
                 (Content.MEGABYTE_LENGTH * config.getInt(Option.MAX_CONTENT_LENGTH, 10)),
                 expiryHandler,
-                config.getStringMap(Option.HTTP_HOST_ALIASES)
+                config.getStringMap(Option.HTTP_HOST_ALIASES),
+                ImmutableSet.copyOf(config.getStringList(Option.ADMIN_API_KEYS))
         ));
         this.server.start();
 

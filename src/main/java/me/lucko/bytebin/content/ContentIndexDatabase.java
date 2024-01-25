@@ -32,13 +32,10 @@ import com.j256.ormlite.field.DataType;
 import com.j256.ormlite.jdbc.JdbcConnectionSource;
 import com.j256.ormlite.support.ConnectionSource;
 import com.j256.ormlite.table.TableUtils;
-
+import io.prometheus.client.Gauge;
 import me.lucko.bytebin.content.storage.StorageBackend;
-
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
-
-import io.prometheus.client.Gauge;
 
 import java.io.IOException;
 import java.nio.file.Files;

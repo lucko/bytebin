@@ -27,16 +27,14 @@ package me.lucko.bytebin.content;
 
 import com.github.benmanes.caffeine.cache.CacheLoader;
 import com.google.common.collect.ImmutableMap;
-
+import io.prometheus.client.Counter;
 import me.lucko.bytebin.content.storage.StorageBackend;
-
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.checkerframework.checker.nullness.qual.NonNull;
 
-import io.prometheus.client.Counter;
-
 import java.util.Collection;
+import java.util.List;
 import java.util.Map;
 import java.util.concurrent.Executor;
 import java.util.concurrent.ScheduledExecutorService;
@@ -148,6 +146,35 @@ public class ContentStorageHandler implements CacheLoader<String, Content> {
     }
 
     /**
+     * Delete content.
+     *
+     * @param content the content to delete
+     */
+    public void delete(Content content) {
+        String key = content.getKey();
+
+        // find the backend that the content is stored in
+        String backendId = content.getBackendId();
+        StorageBackend backend = this.backends.get(backendId);
+        if (backend == null) {
+            LOGGER.error("[STORAGE] Unable to delete " + key + " - no such backend '" + backendId + "'");
+            return;
+        }
+
+        // delete the data from the backend
+        try {
+            backend.delete(key);
+        } catch (Exception e) {
+            LOGGER.warn("[STORAGE] Unable to delete '" + key + "' from the '" + backend.getBackendId() + "' backend", e);
+        }
+
+        // remove the entry from the index
+        this.index.remove(key);
+
+        LOGGER.info("[STORAGE] Deleted '" + key + "' from the '" + backendId + "' backend");
+    }
+
+    /**
      * Invalidates/deletes any expired content and updates the metrics gauges
      */
     public void runInvalidationAndRecordMetrics() {
@@ -155,31 +182,35 @@ public class ContentStorageHandler implements CacheLoader<String, Content> {
         Collection<Content> expired = this.index.getExpired();
 
         for (Content metadata : expired) {
-            String key = metadata.getKey();
-
-            // find the backend that the content is stored in
-            String backendId = metadata.getBackendId();
-            StorageBackend backend = this.backends.get(backendId);
-            if (backend == null) {
-                LOGGER.error("[STORAGE] Unable to delete " + key + " - no such backend '" + backendId + "'");
-                continue;
-            }
-
-            // delete the data from the backend
-            try {
-                backend.delete(key);
-            } catch (Exception e) {
-                LOGGER.warn("[STORAGE] Unable to delete '" + key + "' from the '" + backend.getBackendId() + "' backend", e);
-            }
-
-            // remove the entry from the index
-            this.index.remove(key);
-
-            LOGGER.info("[STORAGE] Deleted '" + key + "' from the '" + backendId + "' backend");
+            delete(metadata);
         }
 
         // update metrics
         this.index.recordMetrics();
+    }
+
+    /**
+     * Bulk deletes the provided keys
+     *
+     * @param keys the keys to delete
+     * @return how many entries were actually deleted
+     */
+    public int bulkDelete(List<String> keys) {
+        int count = 0;
+        for (String key : keys) {
+            Content content = this.index.get(key);
+            if (content == null) {
+                continue;
+            }
+
+            delete(content);
+            count++;
+        }
+
+        // update metrics
+        this.index.recordMetrics();
+
+        return count;
     }
 
     public Executor getExecutor() {

@@ -26,10 +26,8 @@
 package me.lucko.bytebin.content.storage;
 
 import me.lucko.bytebin.content.Content;
-
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
-
 import software.amazon.awssdk.core.ResponseInputStream;
 import software.amazon.awssdk.core.sync.RequestBody;
 import software.amazon.awssdk.services.s3.S3Client;
