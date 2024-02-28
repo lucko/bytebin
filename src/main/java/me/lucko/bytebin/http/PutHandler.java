@@ -141,6 +141,7 @@ public final class PutHandler implements Route.Handler {
                     "    user agent = " + userAgent + "\n" +
                     "    ip = " + ipAddress + "\n" +
                     (origin.equals("null") ? "" : "    origin = " + origin + "\n") +
+                    "    host = " + host + "\n" +
                     "    old content size = " + String.format("%,d", oldContent.getContent().length / 1024) + " KB" + "\n" +
                     "    new content size = " + String.format("%,d", newContent.get().length / 1024) + " KB" + "\n"
             );

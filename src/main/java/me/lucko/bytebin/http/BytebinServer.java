@@ -61,7 +61,7 @@ public class BytebinServer extends Jooby {
     private static final Counter REQUESTS_COUNTER = Counter.build()
             .name("bytebin_requests_total")
             .help("The amount of requests handled")
-            .labelNames("method", "useragent")
+            .labelNames("method", "useragent", "host")
             .register();
 
     public BytebinServer(ContentStorageHandler storageHandler, ContentLoader contentLoader, String host, int port, boolean metrics, RateLimitHandler rateLimitHandler, RateLimiter postRateLimiter, RateLimiter putRateLimiter, RateLimiter readRateLimiter, TokenGenerator contentTokenGenerator, long maxContentLength, ExpiryHandler expiryHandler, Map<String, String> hostAliases, Set<String> adminApiKeys) {
@@ -142,7 +142,7 @@ public class BytebinServer extends Jooby {
         });
     }
 
-    public static String getMetricsLabel(Context ctx) {
+    public static String getUserAgentMetricsLabel(Context ctx) {
         String origin = ctx.header("Origin").valueOrNull();
         if (origin != null) {
             return origin;
@@ -156,12 +156,26 @@ public class BytebinServer extends Jooby {
         return "unknown";
     }
 
-    public static void recordRequest(String method, Context ctx) {
-        recordRequest(method, getMetricsLabel(ctx));
+    public static String getHostMetricsLabel(Context ctx) {
+        String forwardedHost = ctx.header("X-Forwarded-Host").valueOrNull();
+        if (forwardedHost != null) {
+            return forwardedHost;
+        }
+
+        String host = ctx.header("Host").valueOrNull();
+        if (host != null) {
+            return host;
+        }
+
+        return "unknown";
     }
 
-    public static void recordRequest(String method, String metricsLabel) {
-        REQUESTS_COUNTER.labels(method, metricsLabel).inc();
+    public static void recordRequest(String method, Context ctx) {
+        recordRequest(method, getUserAgentMetricsLabel(ctx), getHostMetricsLabel(ctx));
+    }
+
+    public static void recordRequest(String method, String userAgentLabel, String hostLabel) {
+        REQUESTS_COUNTER.labels(method, userAgentLabel, hostLabel).inc();
     }
 
 }

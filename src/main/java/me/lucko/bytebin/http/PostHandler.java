@@ -57,7 +57,7 @@ public final class PostHandler implements Route.Handler {
     public static final Summary CONTENT_SIZE_SUMMARY = Summary.build()
             .name("bytebin_content_size_bytes")
             .help("The size of posted content")
-            .labelNames("useragent")
+            .labelNames("useragent", "host")
             .register();
 
     private final BytebinServer server;
@@ -134,14 +134,16 @@ public final class PostHandler implements Route.Handler {
                 "    user agent = " + userAgent + "\n" +
                 "    ip = " + ipAddress + "\n" +
                 (origin.equals("null") ? "" : "    origin = " + origin + "\n") +
+                "    host = " + host + "\n" +
                 "    content size = " + String.format("%,d", content.length / 1024) + " KB\n" +
                 "    encoding = " + encodings.toString() + "\n"
         );
 
         // metrics
-        String metricsLabel = BytebinServer.getMetricsLabel(ctx);
-        BytebinServer.recordRequest("POST", metricsLabel);
-        CONTENT_SIZE_SUMMARY.labels(metricsLabel).observe(content.length);
+        String userAgentLabel = BytebinServer.getUserAgentMetricsLabel(ctx);
+        String hostLabel = BytebinServer.getHostMetricsLabel(ctx);
+        BytebinServer.recordRequest("POST", userAgentLabel, hostLabel);
+        CONTENT_SIZE_SUMMARY.labels(userAgentLabel, hostLabel).observe(content.length);
 
         // record the content in the cache
         CompletableFuture<Content> future = new CompletableFuture<>();
@@ -181,8 +183,8 @@ public final class PostHandler implements Route.Handler {
 
         if (ctx.getMethod().equals("PUT")) {
             // PUT: return the URL where the content can be accessed
-            host = this.hostAliases.getOrDefault(host, host);
-            String location = "https://" + host + "/" + key;
+            String returnHost = this.hostAliases.getOrDefault(host, host);
+            String location = "https://" + returnHost + "/" + key;
 
             ctx.setResponseHeader("Location", location);
             ctx.setResponseType(MediaType.TEXT);

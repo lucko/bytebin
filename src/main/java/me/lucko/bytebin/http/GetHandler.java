@@ -78,12 +78,17 @@ public final class GetHandler implements Route.Handler {
         // https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/Accept-Encoding
         Set<String> acceptedEncoding = ContentEncoding.getAcceptedEncoding(ctx);
 
-        String origin = ctx.header("Origin").valueOrNull();
+        // get the user agent & origin headers
+        String userAgent = ctx.header("User-Agent").value("null");
+        String origin = ctx.header("Origin").value("null");
+        String host = ctx.getHostAndPort();
+
         LOGGER.info("[REQUEST]\n" +
                 "    key = " + path + "\n" +
-                "    user agent = " + ctx.header("User-Agent").value("null") + "\n" +
+                "    user agent = " + userAgent + "\n" +
                 "    ip = " + ipAddress + "\n" +
-                (origin == null ? "" : "    origin = " + origin + "\n")
+                (origin.equals("null") ? "" : "    origin = " + origin + "\n") +
+                "    host = " + host + "\n"
         );
 
         // metrics
