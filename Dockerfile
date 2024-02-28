@@ -2,22 +2,6 @@
 # Copyright (c) lucko - licenced MIT
 
 # --------------
-# BUILD JRE STAGE
-# --------------
-FROM alpine as build-jre
-RUN apk add --no-cache openjdk21 binutils
-
-# create a minimal JRE
-RUN jlink \
-    --add-modules java.base,java.logging,java.xml,java.desktop,java.management,java.sql,java.naming,jdk.unsupported \
-    --strip-debug \
-    --no-man-pages \
-    --no-header-files \
-    --compress=2 \
-    --output /jre
-
-
-# --------------
 # BUILD PROJECT STAGE
 # --------------
 FROM alpine as build-project
@@ -33,12 +17,7 @@ RUN mvn --no-transfer-progress -B package
 # --------------
 # RUN STAGE
 # --------------
-FROM alpine
-
-# copy JRE from build stage
-ENV JAVA_HOME=/opt/java
-ENV PATH "${JAVA_HOME}/bin:${PATH}"
-COPY --from=build-jre /jre $JAVA_HOME
+FROM eclipse-temurin:21-alpine
 
 RUN addgroup -S bytebin && adduser -S -G bytebin bytebin
 USER bytebin
