@@ -5,8 +5,7 @@
 # BUILD JRE STAGE
 # --------------
 FROM alpine as build-jre
-RUN apk add --no-cache openjdk17
-RUN apk add --no-cache binutils
+RUN apk add --no-cache openjdk21 binutils
 
 # create a minimal JRE
 RUN jlink \
@@ -22,8 +21,7 @@ RUN jlink \
 # BUILD PROJECT STAGE
 # --------------
 FROM alpine as build-project
-RUN apk add --no-cache openjdk17
-RUN apk add --no-cache maven
+RUN apk add --no-cache openjdk21 maven
 
 # compile the project
 WORKDIR /bytebin
