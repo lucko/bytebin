@@ -59,6 +59,12 @@ public class ContentStorageHandler implements CacheLoader<String, Content> {
             .help("Counts the number of times content was written to the backend")
             .register();
 
+    private static final Counter BACKEND_ERROR_COUNTER = Counter.build()
+            .name("bytebin_backend_error_total")
+            .labelNames("backend", "operation")
+            .help("Counts the number of errors that have occurred when interacting with the backend")
+            .register();
+
     /** An index of all stored content */
     private final ContentIndexDatabase index;
 
@@ -100,6 +106,7 @@ public class ContentStorageHandler implements CacheLoader<String, Content> {
         StorageBackend backend = this.backends.get(backendId);
         if (backend == null) {
             LOGGER.error("Unable to load " + key + " - no such backend '" + backendId + "'");
+            BACKEND_ERROR_COUNTER.labels(backendId, "load").inc();
             return Content.EMPTY_CONTENT;
         }
 
@@ -115,6 +122,7 @@ public class ContentStorageHandler implements CacheLoader<String, Content> {
             }
         } catch (Exception e) {
             LOGGER.warn("[STORAGE] Unable to load '" + key + "' from the '" + backendId + "' backend", e);
+            BACKEND_ERROR_COUNTER.labels(backendId, "load").inc();
         }
 
         return Content.EMPTY_CONTENT;
@@ -142,6 +150,7 @@ public class ContentStorageHandler implements CacheLoader<String, Content> {
             backend.save(content);
         } catch (Exception e) {
             LOGGER.warn("[STORAGE] Unable to save '" + content.getKey() + "' to the '" + backendId + "' backend", e);
+            BACKEND_ERROR_COUNTER.labels(backendId, "save").inc();
         }
     }
 
@@ -158,6 +167,7 @@ public class ContentStorageHandler implements CacheLoader<String, Content> {
         StorageBackend backend = this.backends.get(backendId);
         if (backend == null) {
             LOGGER.error("[STORAGE] Unable to delete " + key + " - no such backend '" + backendId + "'");
+            BACKEND_ERROR_COUNTER.labels(backendId, "delete").inc();
             return;
         }
 
@@ -166,6 +176,7 @@ public class ContentStorageHandler implements CacheLoader<String, Content> {
             backend.delete(key);
         } catch (Exception e) {
             LOGGER.warn("[STORAGE] Unable to delete '" + key + "' from the '" + backend.getBackendId() + "' backend", e);
+            BACKEND_ERROR_COUNTER.labels(backendId, "delete").inc();
         }
 
         // remove the entry from the index

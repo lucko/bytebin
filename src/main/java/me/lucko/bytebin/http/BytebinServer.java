@@ -41,6 +41,7 @@ import me.lucko.bytebin.Bytebin;
 import me.lucko.bytebin.content.ContentLoader;
 import me.lucko.bytebin.content.ContentStorageHandler;
 import me.lucko.bytebin.http.admin.BulkDeleteHandler;
+import me.lucko.bytebin.util.ExceptionHandler;
 import me.lucko.bytebin.util.ExpiryHandler;
 import me.lucko.bytebin.util.RateLimitHandler;
 import me.lucko.bytebin.util.RateLimiter;
@@ -90,6 +91,7 @@ public class BytebinServer extends Jooby {
             } else {
                 // handle unexpected errors: log stack trace and send a generic response
                 LOGGER.error("Error thrown by handler", cause);
+                ExceptionHandler.UNCAUGHT_ERROR_COUNTER.labels(cause.getClass().getSimpleName()).inc();
                 ctx.setResponseCode(StatusCode.NOT_FOUND)
                         .setResponseType(MediaType.TEXT)
                         .send("Invalid path");

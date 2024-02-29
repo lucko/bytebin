@@ -32,6 +32,7 @@ import com.j256.ormlite.field.DataType;
 import com.j256.ormlite.jdbc.JdbcConnectionSource;
 import com.j256.ormlite.support.ConnectionSource;
 import com.j256.ormlite.table.TableUtils;
+import io.prometheus.client.Counter;
 import io.prometheus.client.Gauge;
 import me.lucko.bytebin.content.storage.StorageBackend;
 import org.apache.logging.log4j.LogManager;
@@ -72,6 +73,12 @@ public class ContentIndexDatabase implements AutoCloseable {
             .labelNames("type", "backend")
             .register();
 
+    private static final Counter DB_ERROR_COUNTER = Counter.build()
+            .name("bytebin_db_error_total")
+            .labelNames("operation")
+            .help("Counts the number of errors that have occurred when interacting with the index database")
+            .register();
+
     public static ContentIndexDatabase initialise(Collection<StorageBackend> backends) throws SQLException {
         // ensure the db directory exists, sqlite won't create it
         try {
@@ -110,6 +117,7 @@ public class ContentIndexDatabase implements AutoCloseable {
             this.dao.createOrUpdate(content);
         } catch (SQLException e) {
             LOGGER.error("[INDEX DB] Error performing sql operation", e);
+            DB_ERROR_COUNTER.labels("put").inc();
         }
     }
 
@@ -118,6 +126,7 @@ public class ContentIndexDatabase implements AutoCloseable {
             return this.dao.queryForId(key);
         } catch (SQLException e) {
             LOGGER.error("[INDEX DB] Error performing sql operation", e);
+            DB_ERROR_COUNTER.labels("get").inc();
             return null;
         }
     }
@@ -127,6 +136,7 @@ public class ContentIndexDatabase implements AutoCloseable {
             this.dao.create(content);
         } catch (Exception e) {
             LOGGER.error("[INDEX DB] Error performing sql operation", e);
+            DB_ERROR_COUNTER.labels("putAll").inc();
         }
     }
 
@@ -135,6 +145,7 @@ public class ContentIndexDatabase implements AutoCloseable {
             this.dao.deleteById(key);
         } catch (SQLException e) {
             LOGGER.error("[INDEX DB] Error performing sql operation", e);
+            DB_ERROR_COUNTER.labels("remove").inc();
         }
     }
 
@@ -147,6 +158,7 @@ public class ContentIndexDatabase implements AutoCloseable {
                     .query();
         } catch (SQLException e) {
             LOGGER.error("[INDEX DB] Error performing sql operation", e);
+            DB_ERROR_COUNTER.labels("getExpired").inc();
             return Collections.emptyList();
         }
     }
@@ -170,6 +182,7 @@ public class ContentIndexDatabase implements AutoCloseable {
             return map;
         } catch (Exception e) {
             LOGGER.error("[INDEX DB] Error performing sql operation", e);
+            DB_ERROR_COUNTER.labels("queryStringToIntMap").inc();
             return Collections.emptyMap();
         }
     }
