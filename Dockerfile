@@ -4,8 +4,7 @@
 # --------------
 # BUILD PROJECT STAGE
 # --------------
-FROM alpine as build-project
-RUN apk add --no-cache openjdk21 maven
+FROM maven:3-eclipse-temurin-21-alpine as build-project
 
 # compile the project
 WORKDIR /bytebin
