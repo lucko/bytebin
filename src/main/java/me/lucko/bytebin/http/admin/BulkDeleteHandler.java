@@ -30,6 +30,7 @@ import io.jooby.Context;
 import io.jooby.Route;
 import io.jooby.StatusCode;
 import io.jooby.exception.StatusCodeException;
+import me.lucko.bytebin.content.ContentLoader;
 import me.lucko.bytebin.content.ContentStorageHandler;
 import me.lucko.bytebin.http.BytebinServer;
 import org.apache.logging.log4j.LogManager;
@@ -50,11 +51,13 @@ public final class BulkDeleteHandler implements Route.Handler {
 
     private final BytebinServer server;
     private final ContentStorageHandler storageHandler;
+    private final ContentLoader contentLoader;
     private final Set<String> apiKeys;
 
-    public BulkDeleteHandler(BytebinServer server, ContentStorageHandler storageHandler, Set<String> apiKeys) {
+    public BulkDeleteHandler(BytebinServer server, ContentStorageHandler storageHandler, ContentLoader contentLoader, Set<String> apiKeys) {
         this.server = server;
         this.storageHandler = storageHandler;
+        this.contentLoader = contentLoader;
         this.apiKeys = apiKeys;
     }
 
@@ -87,6 +90,7 @@ public final class BulkDeleteHandler implements Route.Handler {
 
         return CompletableFuture.supplyAsync(() -> {
             int deleted = this.storageHandler.bulkDelete(list);
+            this.contentLoader.invalidate(list);
             LOGGER.info("[BULK DELETE] Successfully deleted " + deleted + " entries");
             return deleted;
         });

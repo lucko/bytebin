@@ -140,7 +140,7 @@ public class BytebinServer extends Jooby {
         });
 
         routes(() -> {
-            post("/admin/bulkdelete", new BulkDeleteHandler(this, storageHandler, adminApiKeys));
+            post("/admin/bulkdelete", new BulkDeleteHandler(this, storageHandler, contentLoader, adminApiKeys));
         });
     }
 

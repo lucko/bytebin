@@ -29,6 +29,7 @@ import com.github.benmanes.caffeine.cache.AsyncLoadingCache;
 import com.github.benmanes.caffeine.cache.Caffeine;
 import com.github.benmanes.caffeine.cache.Weigher;
 
+import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
@@ -64,6 +65,13 @@ public interface ContentLoader {
     CompletableFuture<? extends Content> get(String key);
 
     /**
+     * Invalidates any cache for the given keys.
+     *
+     * @param keys the keys
+     */
+    void invalidate(List<String> keys);
+
+    /**
      * A {@link ContentLoader} backed by a cache.
      */
     final class CachedContentLoader implements ContentLoader {
@@ -86,6 +94,11 @@ public interface ContentLoader {
         @Override
         public CompletableFuture<Content> get(String key) {
             return this.cache.get(key);
+        }
+
+        @Override
+        public void invalidate(List<String> keys) {
+            this.cache.synchronous().invalidateAll(keys);
         }
     }
 
@@ -119,6 +132,13 @@ public interface ContentLoader {
             }
 
             return this.storageHandler.asyncLoad(key, this.storageHandler.getExecutor());
+        }
+
+        @Override
+        public void invalidate(List<String> keys) {
+            for (String key : keys) {
+                this.saveInProgress.remove(key);
+            }
         }
     }
 
