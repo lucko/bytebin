@@ -131,7 +131,11 @@ public interface ContentLoader {
                 return saveInProgressFuture;
             }
 
-            return this.storageHandler.asyncLoad(key, this.storageHandler.getExecutor());
+            try {
+                return this.storageHandler.asyncLoad(key, this.storageHandler.getExecutor());
+            } catch (Exception e) {
+                throw new RuntimeException(e);
+            }
         }
 
         @Override

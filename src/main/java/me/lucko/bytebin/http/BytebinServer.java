@@ -25,17 +25,18 @@
 
 package me.lucko.bytebin.http;
 
-import io.jooby.AssetHandler;
-import io.jooby.AssetSource;
 import io.jooby.Context;
-import io.jooby.Cors;
-import io.jooby.CorsHandler;
 import io.jooby.ExecutionMode;
 import io.jooby.Jooby;
 import io.jooby.MediaType;
+import io.jooby.ReactiveSupport;
 import io.jooby.ServerOptions;
 import io.jooby.StatusCode;
 import io.jooby.exception.StatusCodeException;
+import io.jooby.handler.AssetHandler;
+import io.jooby.handler.AssetSource;
+import io.jooby.handler.Cors;
+import io.jooby.handler.CorsHandler;
 import io.prometheus.client.Counter;
 import me.lucko.bytebin.Bytebin;
 import me.lucko.bytebin.content.ContentLoader;
@@ -75,6 +76,8 @@ public class BytebinServer extends Jooby {
 
         setExecutionMode(ExecutionMode.EVENT_LOOP);
         setTrustProxy(true);
+
+        use(ReactiveSupport.concurrent());
 
         // catch all errors & just return some generic error message
         error((ctx, cause, code) -> {
@@ -117,7 +120,7 @@ public class BytebinServer extends Jooby {
 
         // define route handlers
         routes(() -> {
-            decorator(new CorsHandler(new Cors()
+            use(new CorsHandler(new Cors()
                     .setUseCredentials(false)
                     .setMaxAge(Duration.ofDays(1))
                     .setMethods("POST", "PUT")
@@ -129,7 +132,7 @@ public class BytebinServer extends Jooby {
         });
 
         routes(() -> {
-            decorator(new CorsHandler(new Cors()
+            use(new CorsHandler(new Cors()
                     .setUseCredentials(false)
                     .setMaxAge(Duration.ofDays(1))
                     .setMethods("GET", "PUT")

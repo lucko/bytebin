@@ -31,7 +31,6 @@ import io.prometheus.client.Counter;
 import me.lucko.bytebin.content.storage.StorageBackend;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
-import org.checkerframework.checker.nullness.qual.NonNull;
 
 import java.util.Collection;
 import java.util.List;
@@ -93,7 +92,7 @@ public class ContentStorageHandler implements CacheLoader<String, Content> {
      * @return the loaded content
      */
     @Override
-    public @NonNull Content load(String key) {
+    public Content load(String key) {
         // query the index to see if content with this key is stored
         Content metadata = this.index.get(key);
         if (metadata == null) {

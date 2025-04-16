@@ -1,8 +1,6 @@
-version: "3.8"
-
 services:
   bytebin:
-    image: ghcr.io/lucko/bytebin
+    image: bytebin
     ports:
       - 3000:8080
     volumes:

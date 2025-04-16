@@ -4,7 +4,7 @@
 # --------------
 # BUILD PROJECT STAGE
 # --------------
-FROM maven:3-eclipse-temurin-21-alpine as build-project
+FROM maven:3-eclipse-temurin-21-alpine AS build-project
 
 # compile the project
 WORKDIR /bytebin
