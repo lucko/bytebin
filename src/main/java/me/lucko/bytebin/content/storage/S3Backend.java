@@ -29,6 +29,8 @@ import me.lucko.bytebin.content.Content;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import software.amazon.awssdk.core.ResponseInputStream;
+import software.amazon.awssdk.core.checksums.RequestChecksumCalculation;
+import software.amazon.awssdk.core.checksums.ResponseChecksumValidation;
 import software.amazon.awssdk.core.sync.RequestBody;
 import software.amazon.awssdk.services.s3.S3Client;
 import software.amazon.awssdk.services.s3.S3ClientBuilder;
@@ -72,7 +74,9 @@ public class S3Backend implements StorageBackend {
 
         String s3EndpointUrl = System.getenv("AWS_S3_ENDPOINT_URL");
         if (s3EndpointUrl != null && !s3EndpointUrl.isBlank()) {
-            builder = builder.endpointOverride(URI.create(s3EndpointUrl));
+            builder = builder.endpointOverride(URI.create(s3EndpointUrl))
+                    .requestChecksumCalculation(RequestChecksumCalculation.WHEN_REQUIRED)
+                    .responseChecksumValidation(ResponseChecksumValidation.WHEN_REQUIRED);
         }
 
         this.client = builder.build();
