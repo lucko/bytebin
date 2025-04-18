@@ -42,6 +42,7 @@ import me.lucko.bytebin.Bytebin;
 import me.lucko.bytebin.content.ContentLoader;
 import me.lucko.bytebin.content.ContentStorageHandler;
 import me.lucko.bytebin.http.admin.BulkDeleteHandler;
+import me.lucko.bytebin.logging.LogHandler;
 import me.lucko.bytebin.util.ExceptionHandler;
 import me.lucko.bytebin.util.ExpiryHandler;
 import me.lucko.bytebin.util.RateLimitHandler;
@@ -66,7 +67,7 @@ public class BytebinServer extends Jooby {
             .labelNames("method", "useragent")
             .register();
 
-    public BytebinServer(ContentStorageHandler storageHandler, ContentLoader contentLoader, String host, int port, boolean metrics, RateLimitHandler rateLimitHandler, RateLimiter postRateLimiter, RateLimiter putRateLimiter, RateLimiter readRateLimiter, TokenGenerator contentTokenGenerator, long maxContentLength, ExpiryHandler expiryHandler, Map<String, String> hostAliases, Set<String> adminApiKeys) {
+    public BytebinServer(ContentStorageHandler storageHandler, ContentLoader contentLoader, LogHandler logHandler, String host, int port, boolean metrics, RateLimitHandler rateLimitHandler, RateLimiter postRateLimiter, RateLimiter putRateLimiter, RateLimiter readRateLimiter, TokenGenerator contentTokenGenerator, long maxContentLength, ExpiryHandler expiryHandler, Map<String, String> hostAliases, Set<String> adminApiKeys) {
         ServerOptions serverOpts = new ServerOptions();
         serverOpts.setHost(host);
         serverOpts.setPort(port);
@@ -126,7 +127,7 @@ public class BytebinServer extends Jooby {
                     .setMethods("POST", "PUT")
                     .setHeaders("Content-Type", "Accept", "Origin", "Content-Encoding", "Allow-Modification")));
 
-            PostHandler postHandler = new PostHandler(this, postRateLimiter, rateLimitHandler, storageHandler, contentLoader, contentTokenGenerator, maxContentLength, expiryHandler, hostAliases);
+            PostHandler postHandler = new PostHandler(this, logHandler, postRateLimiter, rateLimitHandler, storageHandler, contentLoader, contentTokenGenerator, maxContentLength, expiryHandler, hostAliases);
             post("/post", postHandler);
             put("/post", postHandler);
         });
@@ -138,8 +139,8 @@ public class BytebinServer extends Jooby {
                     .setMethods("GET", "PUT")
                     .setHeaders("Content-Type", "Accept", "Origin", "Content-Encoding", "Authorization")));
 
-            get("/{id:[a-zA-Z0-9]+}", new GetHandler(this, readRateLimiter, rateLimitHandler, contentLoader));
-            put("/{id:[a-zA-Z0-9]+}", new UpdateHandler(this, putRateLimiter, rateLimitHandler, storageHandler, contentLoader, maxContentLength, expiryHandler));
+            get("/{id:[a-zA-Z0-9]+}", new GetHandler(this, logHandler, readRateLimiter, rateLimitHandler, contentLoader));
+            put("/{id:[a-zA-Z0-9]+}", new UpdateHandler(this, logHandler, putRateLimiter, rateLimitHandler, storageHandler, contentLoader, maxContentLength, expiryHandler));
         });
 
         routes(() -> {

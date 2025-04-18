@@ -152,6 +152,9 @@ public class Configuration {
         METRICS("metricsEnabled", "bytebin.metrics.enabled"),
         AUDIT_ON_STARTUP("startupAudit", "bytebin.startup.audit"),
 
+        LOGGING_HTTP_URI("loggingHttpUri", "bytebin.logging.http.uri"),
+        LOGGING_HTTP_FLUSH_PERIOD("loggingHttpFlushPeriodSeconds", "bytebin.logging.http.flush.period"), // seconds
+
         KEY_LENGTH("keyLength", "bytebin.misc.keylength"),
         EXECUTOR_POOL_SIZE("corePoolSize", "bytebin.misc.corepoolsize"),
 

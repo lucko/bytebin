@@ -31,6 +31,7 @@ import io.jooby.Route;
 import io.jooby.StatusCode;
 import io.jooby.exception.StatusCodeException;
 import me.lucko.bytebin.content.ContentLoader;
+import me.lucko.bytebin.logging.LogHandler;
 import me.lucko.bytebin.util.ContentEncoding;
 import me.lucko.bytebin.util.Gzip;
 import me.lucko.bytebin.util.RateLimitHandler;
@@ -52,12 +53,14 @@ public final class GetHandler implements Route.Handler {
     private static final Logger LOGGER = LogManager.getLogger(GetHandler.class);
 
     private final BytebinServer server;
+    private final LogHandler logHandler;
     private final RateLimiter rateLimiter;
     private final RateLimitHandler rateLimitHandler;
     private final ContentLoader contentLoader;
 
-    public GetHandler(BytebinServer server, RateLimiter rateLimiter, RateLimitHandler rateLimitHandler, ContentLoader contentLoader) {
+    public GetHandler(BytebinServer server, LogHandler logHandler, RateLimiter rateLimiter, RateLimitHandler rateLimitHandler, ContentLoader contentLoader) {
         this.server = server;
+        this.logHandler = logHandler;
         this.rateLimiter = rateLimiter;
         this.rateLimitHandler = rateLimitHandler;
         this.contentLoader = contentLoader;
@@ -72,28 +75,39 @@ public final class GetHandler implements Route.Handler {
         }
 
         // check rate limits
-        String ipAddress = this.rateLimitHandler.getIpAddressAndCheckRateLimit(ctx, this.rateLimiter);
+        RateLimitHandler.Result rateLimitResult = this.rateLimitHandler.getIpAddressAndCheckRateLimit(ctx, this.rateLimiter);
+        String ipAddress = rateLimitResult.ipAddress();
 
         // get the encodings supported by the requester
         // https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/Accept-Encoding
         Set<String> acceptedEncoding = ContentEncoding.getAcceptedEncoding(ctx);
 
-        String origin = ctx.header("Origin").valueOrNull();
+        // get the user agent & origin headers
+        String userAgent = ctx.header("User-Agent").value("null");
+        String origin = ctx.header("Origin").value("null");
+        String host = ctx.getHostAndPort();
+
         LOGGER.info("[REQUEST]\n" +
                 "    key = " + path + "\n" +
-                "    user agent = " + ctx.header("User-Agent").value("null") + "\n" +
+                "    user agent = " + userAgent + "\n" +
                 "    ip = " + ipAddress + "\n" +
-                (origin == null ? "" : "    origin = " + origin + "\n")
+                (origin.equals("null") ? "" : "    origin = " + origin + "\n") +
+                "    host = " + host + "\n"
         );
 
         // metrics
-        BytebinServer.recordRequest("GET", ctx);
+        if (rateLimitResult.countMetrics()) {
+            BytebinServer.recordRequest("GET", ctx);
+            this.logHandler.logAttemptedGet(path, userAgent, origin, ipAddress);
+        }
 
         // request the file from the cache async
         return this.contentLoader.get(path).handleAsync((content, throwable) -> {
             if (throwable != null || content == null || content.getKey() == null || content.getContent().length == 0) {
                 throw new StatusCodeException(StatusCode.NOT_FOUND, "Invalid path");
             }
+
+            this.logHandler.logGet(path, userAgent, origin, ipAddress, content.getContentLength(), content.getContentType(), content.getExpiry());
 
             ctx.setResponseHeader("Last-Modified", Instant.ofEpochMilli(content.getLastModified()));
 

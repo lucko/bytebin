@@ -51,7 +51,19 @@ public final class RateLimitHandler {
         this.apiKeys = ImmutableSet.copyOf(apiKeys);
     }
 
-    public String getIpAddressAndCheckRateLimit(Context ctx, RateLimiter limiter) {
+    public boolean isValidApiKey(Context ctx) {
+        String apiKey = ctx.header(HEADER_API_KEY).value("");
+        if (!apiKey.isEmpty()) {
+            if (!this.apiKeys.contains(apiKey)) {
+                throw new StatusCodeException(StatusCode.UNAUTHORIZED, "API key is invalid");
+            }
+
+            return true;
+        }
+        return false;
+    }
+
+    public Result getIpAddressAndCheckRateLimit(Context ctx, RateLimiter limiter) {
         // get the connection IP address according to cloudflare, fallback to
         // the remote address
         String ipAddress = ctx.header("x-real-ip").valueOrNull();
@@ -59,20 +71,18 @@ public final class RateLimitHandler {
             ipAddress = ctx.getRemoteAddress();
         }
 
-        // if an API key has been specified, ensure it is valid, then replace
-        // the IP address with the one specified by the forwarded-for header.
-        String apiKey = ctx.header(HEADER_API_KEY).value("");
-        if (!apiKey.isEmpty()) {
-            if (!this.apiKeys.contains(apiKey)) {
-                throw new StatusCodeException(StatusCode.UNAUTHORIZED, "API key is invalid");
-            }
-
+        // if an API key has been specified, replace the IP address with the one
+        // specified by the forwarded-for header.
+        boolean validApiKey = isValidApiKey(ctx);
+        boolean forwarded = false;
+        if (validApiKey) {
             String originalIp = ctx.header(HEADER_FORWARDED_IP).valueOrNull();
             if (originalIp == null) {
-                return ipAddress; // if API key is present but no forwarded IP, skip rate limit checking
+                return new Result(ipAddress, true, false);
             }
 
             ipAddress = originalIp;
+            forwarded = true;
         }
 
         // check rate limits
@@ -80,7 +90,18 @@ public final class RateLimitHandler {
             throw new StatusCodeException(StatusCode.TOO_MANY_REQUESTS, "Rate limit exceeded");
         }
 
-        return ipAddress;
+        return new Result(ipAddress, validApiKey, forwarded);
     }
+
+    public record Result(String ipAddress, boolean validApiKey, boolean forwarded) {
+
+        public boolean countMetrics() {
+            // if API key not provided, record metrics
+            // if API key provided but forwarded IP known, record metrics
+            // else, don't record metrics
+            return !this.validApiKey || this.forwarded;
+        }
+    }
+
 
 }

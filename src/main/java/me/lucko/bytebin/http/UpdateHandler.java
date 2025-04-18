@@ -31,6 +31,7 @@ import io.jooby.StatusCode;
 import io.jooby.exception.StatusCodeException;
 import me.lucko.bytebin.content.ContentLoader;
 import me.lucko.bytebin.content.ContentStorageHandler;
+import me.lucko.bytebin.logging.LogHandler;
 import me.lucko.bytebin.util.ContentEncoding;
 import me.lucko.bytebin.util.ExpiryHandler;
 import me.lucko.bytebin.util.Gzip;
@@ -44,7 +45,6 @@ import javax.annotation.Nonnull;
 import java.util.Date;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.atomic.AtomicReference;
 
 public final class UpdateHandler implements Route.Handler {
 
@@ -52,6 +52,7 @@ public final class UpdateHandler implements Route.Handler {
     private static final Logger LOGGER = LogManager.getLogger(UpdateHandler.class);
 
     private final BytebinServer server;
+    private final LogHandler logHandler;
     private final RateLimiter rateLimiter;
     private final RateLimitHandler rateLimitHandler;
 
@@ -60,8 +61,9 @@ public final class UpdateHandler implements Route.Handler {
     private final long maxContentLength;
     private final ExpiryHandler expiryHandler;
 
-    public UpdateHandler(BytebinServer server, RateLimiter rateLimiter, RateLimitHandler rateLimitHandler, ContentStorageHandler storageHandler, ContentLoader contentLoader, long maxContentLength, ExpiryHandler expiryHandler) {
+    public UpdateHandler(BytebinServer server, LogHandler logHandler, RateLimiter rateLimiter, RateLimitHandler rateLimitHandler, ContentStorageHandler storageHandler, ContentLoader contentLoader, long maxContentLength, ExpiryHandler expiryHandler) {
         this.server = server;
+        this.logHandler = logHandler;
         this.rateLimiter = rateLimiter;
         this.rateLimitHandler = rateLimitHandler;
         this.storageHandler = storageHandler;
@@ -78,15 +80,16 @@ public final class UpdateHandler implements Route.Handler {
             throw new StatusCodeException(StatusCode.NOT_FOUND, "Invalid path");
         }
 
-        AtomicReference<byte[]> newContent = new AtomicReference<>(ctx.body().bytes());
+        byte[] newContent = ctx.body().bytes();
 
         // ensure something was actually posted
-        if (newContent.get().length == 0) {
+        if (newContent.length == 0) {
             throw new StatusCodeException(StatusCode.BAD_REQUEST, "Missing content");
         }
 
         // check rate limits
-        String ipAddress = this.rateLimitHandler.getIpAddressAndCheckRateLimit(ctx, this.rateLimiter);
+        RateLimitHandler.Result rateLimitResult = this.rateLimitHandler.getIpAddressAndCheckRateLimit(ctx, this.rateLimiter);
+        String ipAddress = rateLimitResult.ipAddress();
 
         String authHeader = ctx.header("Authorization").valueOrNull();
         if (authHeader == null) {
@@ -116,14 +119,16 @@ public final class UpdateHandler implements Route.Handler {
             // determine new encoding
             List<String> newEncodings = ContentEncoding.getContentEncoding(ctx.header("Content-Encoding").valueOrNull());
 
+            byte[] buf = newContent;
+
             // compress if necessary
             if (newEncodings.isEmpty()) {
-                newContent.set(Gzip.compress(newContent.get()));
+                buf = Gzip.compress(buf);
                 newEncodings.add(ContentEncoding.GZIP);
             }
 
             // check max content length
-            if (newContent.get().length > this.maxContentLength) {
+            if (buf.length > this.maxContentLength) {
                 throw new StatusCodeException(StatusCode.REQUEST_ENTITY_TOO_LARGE, "Content too large");
             }
 
@@ -136,24 +141,28 @@ public final class UpdateHandler implements Route.Handler {
 
             LOGGER.info("[PUT]\n" +
                     "    key = " + path + "\n" +
-                    "    new type = " + new String(newContentType.getBytes()) + "\n" +
-                    "    new encoding = " + newEncodings.toString() + "\n" +
+                    "    new type = " + newContentType + "\n" +
+                    "    new encoding = " + newEncodings + "\n" +
                     "    user agent = " + userAgent + "\n" +
                     "    ip = " + ipAddress + "\n" +
                     (origin.equals("null") ? "" : "    origin = " + origin + "\n") +
+                    "    host = " + host + "\n" +
                     "    old content size = " + String.format("%,d", oldContent.getContent().length / 1024) + " KB" + "\n" +
-                    "    new content size = " + String.format("%,d", newContent.get().length / 1024) + " KB" + "\n"
+                    "    new content size = " + String.format("%,d", buf.length / 1024) + " KB" + "\n"
             );
 
             // metrics
-            BytebinServer.recordRequest("PUT", ctx);
+            if (rateLimitResult.countMetrics()) {
+                BytebinServer.recordRequest("PUT", ctx);
+                this.logHandler.logPost(path, userAgent, origin, ipAddress, buf.length, newContentType, newExpiry);
+            }
 
             // update the content instance with the new data
             oldContent.setContentType(newContentType);
             oldContent.setEncoding(String.join(",", newEncodings));
             oldContent.setExpiry(newExpiry);
             oldContent.setLastModified(System.currentTimeMillis());
-            oldContent.setContent(newContent.get());
+            oldContent.setContent(buf);
 
             // make the http response
             ctx.setResponseCode(StatusCode.OK);

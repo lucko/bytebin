@@ -34,6 +34,7 @@ import io.prometheus.client.Summary;
 import me.lucko.bytebin.content.Content;
 import me.lucko.bytebin.content.ContentLoader;
 import me.lucko.bytebin.content.ContentStorageHandler;
+import me.lucko.bytebin.logging.LogHandler;
 import me.lucko.bytebin.util.ContentEncoding;
 import me.lucko.bytebin.util.ExpiryHandler;
 import me.lucko.bytebin.util.Gzip;
@@ -61,6 +62,7 @@ public final class PostHandler implements Route.Handler {
             .register();
 
     private final BytebinServer server;
+    private final LogHandler logHandler;
     private final RateLimiter rateLimiter;
     private final RateLimitHandler rateLimitHandler;
 
@@ -72,8 +74,9 @@ public final class PostHandler implements Route.Handler {
     private final ExpiryHandler expiryHandler;
     private final Map<String, String> hostAliases;
 
-    public PostHandler(BytebinServer server, RateLimiter rateLimiter, RateLimitHandler rateLimitHandler, ContentStorageHandler storageHandler, ContentLoader contentLoader, TokenGenerator contentTokenGenerator, long maxContentLength, ExpiryHandler expiryHandler, Map<String, String> hostAliases) {
+    public PostHandler(BytebinServer server, LogHandler logHandler, RateLimiter rateLimiter, RateLimitHandler rateLimitHandler, ContentStorageHandler storageHandler, ContentLoader contentLoader, TokenGenerator contentTokenGenerator, long maxContentLength, ExpiryHandler expiryHandler, Map<String, String> hostAliases) {
         this.server = server;
+        this.logHandler = logHandler;
         this.rateLimiter = rateLimiter;
         this.rateLimitHandler = rateLimitHandler;
         this.storageHandler = storageHandler;
@@ -95,7 +98,8 @@ public final class PostHandler implements Route.Handler {
         }
 
         // check rate limits
-        String ipAddress = this.rateLimitHandler.getIpAddressAndCheckRateLimit(ctx, this.rateLimiter);
+        RateLimitHandler.Result rateLimitResult = this.rateLimitHandler.getIpAddressAndCheckRateLimit(ctx, this.rateLimiter);
+        String ipAddress = rateLimitResult.ipAddress();
 
         // determine the content type
         String contentType = ctx.header("Content-Type").value("text/plain");
@@ -134,14 +138,19 @@ public final class PostHandler implements Route.Handler {
                 "    user agent = " + userAgent + "\n" +
                 "    ip = " + ipAddress + "\n" +
                 (origin.equals("null") ? "" : "    origin = " + origin + "\n") +
+                "    host = " + host + "\n" +
                 "    content size = " + String.format("%,d", content.length / 1024) + " KB\n" +
                 "    encoding = " + encodings.toString() + "\n"
         );
 
         // metrics
-        String metricsLabel = BytebinServer.getMetricsLabel(ctx);
-        BytebinServer.recordRequest("POST", metricsLabel);
-        CONTENT_SIZE_SUMMARY.labels(metricsLabel).observe(content.length);
+        if (rateLimitResult.countMetrics()) {
+            String metricsLabel = BytebinServer.getMetricsLabel(ctx);
+            BytebinServer.recordRequest("POST", metricsLabel);
+            CONTENT_SIZE_SUMMARY.labels(metricsLabel).observe(content.length);
+
+            this.logHandler.logPost(key, userAgent, origin, ipAddress, content.length, contentType, expiry);
+        }
 
         // record the content in the cache
         CompletableFuture<Content> future = new CompletableFuture<>();

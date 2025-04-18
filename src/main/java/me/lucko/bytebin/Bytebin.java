@@ -40,6 +40,8 @@ import me.lucko.bytebin.content.storage.LocalDiskBackend;
 import me.lucko.bytebin.content.storage.S3Backend;
 import me.lucko.bytebin.content.storage.StorageBackend;
 import me.lucko.bytebin.http.BytebinServer;
+import me.lucko.bytebin.logging.HttpLogHandler;
+import me.lucko.bytebin.logging.LogHandler;
 import me.lucko.bytebin.util.Configuration;
 import me.lucko.bytebin.util.Configuration.Option;
 import me.lucko.bytebin.util.EnvVars;
@@ -93,6 +95,7 @@ public final class Bytebin implements AutoCloseable {
     private final ScheduledExecutorService executor;
 
     private final ContentIndexDatabase indexDatabase;
+    private final LogHandler logHandler;
 
     /** The web server instance */
     private final BytebinServer server;
@@ -152,10 +155,16 @@ public final class Bytebin implements AutoCloseable {
             DefaultExports.initialize();
         }
 
+        String loggingHttpUri = config.getString(Option.LOGGING_HTTP_URI, null);
+        this.logHandler = loggingHttpUri != null
+                ? new HttpLogHandler(loggingHttpUri, config.getInt(Option.LOGGING_HTTP_FLUSH_PERIOD, 10))
+                : new LogHandler.Stub();
+
         // setup the web server
         this.server = (BytebinServer) Jooby.createApp(new String[0], ExecutionMode.EVENT_LOOP, () -> new BytebinServer(
                 storageHandler,
                 contentLoader,
+                this.logHandler,
                 config.getString(Option.HOST, "0.0.0.0"),
                 config.getInt(Option.PORT, 8080),
                 metrics,
@@ -207,6 +216,7 @@ public final class Bytebin implements AutoCloseable {
         } catch (Exception e) {
             LOGGER.error("Exception whilst shutting down index database", e);
         }
+        this.logHandler.close();
     }
 
 }
