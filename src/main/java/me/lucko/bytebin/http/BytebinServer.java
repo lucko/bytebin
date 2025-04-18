@@ -139,7 +139,7 @@ public class BytebinServer extends Jooby {
                     .setHeaders("Content-Type", "Accept", "Origin", "Content-Encoding", "Authorization")));
 
             get("/{id:[a-zA-Z0-9]+}", new GetHandler(this, readRateLimiter, rateLimitHandler, contentLoader));
-            put("/{id:[a-zA-Z0-9]+}", new PutHandler(this, putRateLimiter, rateLimitHandler, storageHandler, contentLoader, maxContentLength, expiryHandler));
+            put("/{id:[a-zA-Z0-9]+}", new UpdateHandler(this, putRateLimiter, rateLimitHandler, storageHandler, contentLoader, maxContentLength, expiryHandler));
         });
 
         routes(() -> {

@@ -46,10 +46,10 @@ import java.util.List;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.atomic.AtomicReference;
 
-public final class PutHandler implements Route.Handler {
+public final class UpdateHandler implements Route.Handler {
 
     /** Logger instance */
-    private static final Logger LOGGER = LogManager.getLogger(PutHandler.class);
+    private static final Logger LOGGER = LogManager.getLogger(UpdateHandler.class);
 
     private final BytebinServer server;
     private final RateLimiter rateLimiter;
@@ -60,7 +60,7 @@ public final class PutHandler implements Route.Handler {
     private final long maxContentLength;
     private final ExpiryHandler expiryHandler;
 
-    public PutHandler(BytebinServer server, RateLimiter rateLimiter, RateLimitHandler rateLimitHandler, ContentStorageHandler storageHandler, ContentLoader contentLoader, long maxContentLength, ExpiryHandler expiryHandler) {
+    public UpdateHandler(BytebinServer server, RateLimiter rateLimiter, RateLimitHandler rateLimitHandler, ContentStorageHandler storageHandler, ContentLoader contentLoader, long maxContentLength, ExpiryHandler expiryHandler) {
         this.server = server;
         this.rateLimiter = rateLimiter;
         this.rateLimitHandler = rateLimitHandler;

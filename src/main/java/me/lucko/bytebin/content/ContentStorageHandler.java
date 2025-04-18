@@ -203,13 +203,23 @@ public class ContentStorageHandler implements CacheLoader<String, Content> {
      * Bulk deletes the provided keys
      *
      * @param keys the keys to delete
+     * @param force whether to sill attempt deletion if the content is not in the index
      * @return how many entries were actually deleted
      */
-    public int bulkDelete(List<String> keys) {
+    public int bulkDelete(List<String> keys, boolean force) {
         int count = 0;
         for (String key : keys) {
             Content content = this.index.get(key);
             if (content == null) {
+                if (force) {
+                    for (StorageBackend backend : this.backends.values()) {
+                        try {
+                            backend.delete(key);
+                        } catch (Exception e) {
+                            // ignore
+                        }
+                    }
+                }
                 continue;
             }
 

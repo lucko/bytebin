@@ -81,15 +81,18 @@ public final class BulkDeleteHandler implements Route.Handler {
         }
         String origin = ctx.header("Origin").valueOrNull();
 
+        boolean force = ctx.query("force").booleanValue(false);
+
         LOGGER.info("[BULK DELETE]\n" +
                 "    user agent = " + ctx.header("User-Agent").value("null") + "\n" +
                 "    ip = " + ipAddress + "\n" +
-                (origin == null ? "" : "    origin = " + origin + "\n")
+                (origin == null ? "" : "    origin = " + origin + "\n") +
+                "    keys = " + list + "\n" +
+                "    force = " + force + "\n"
         );
-        LOGGER.info("[BULK DELETE] keys = " + list);
 
         return CompletableFuture.supplyAsync(() -> {
-            int deleted = this.storageHandler.bulkDelete(list);
+            int deleted = this.storageHandler.bulkDelete(list, force);
             this.contentLoader.invalidate(list);
             LOGGER.info("[BULK DELETE] Successfully deleted " + deleted + " entries");
             return deleted;

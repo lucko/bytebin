@@ -67,7 +67,12 @@ public final class RateLimitHandler {
                 throw new StatusCodeException(StatusCode.UNAUTHORIZED, "API key is invalid");
             }
 
-            ipAddress = ctx.header(HEADER_FORWARDED_IP).value(ipAddress);
+            String originalIp = ctx.header(HEADER_FORWARDED_IP).valueOrNull();
+            if (originalIp == null) {
+                return ipAddress; // if API key is present but no forwarded IP, skip rate limit checking
+            }
+
+            ipAddress = originalIp;
         }
 
         // check rate limits

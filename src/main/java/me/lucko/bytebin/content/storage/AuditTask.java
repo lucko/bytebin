@@ -25,6 +25,7 @@
 
 package me.lucko.bytebin.content.storage;
 
+import com.google.gson.Gson;
 import me.lucko.bytebin.content.ContentIndexDatabase;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
@@ -67,7 +68,7 @@ public class AuditTask implements Runnable {
                     .toList();
 
             LOGGER.info("[AUDIT] Found {} records that exist in the {} backend but not the index!", keysToDelete.size(), backendId);
-            LOGGER.info("[AUDIT] " + String.join(",", keysToDelete));
+            LOGGER.info("[AUDIT] " + new Gson().toJson(keysToDelete));
         }
 
         LOGGER.info("[AUDIT] Finished audit");
