@@ -44,6 +44,7 @@ import javax.annotation.Nonnull;
 import java.io.IOException;
 import java.time.Instant;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 
@@ -86,6 +87,7 @@ public final class GetHandler implements Route.Handler {
         String userAgent = ctx.header("User-Agent").value("null");
         String origin = ctx.header("Origin").value("null");
         String host = ctx.getHostAndPort();
+        Map<String, String> headers = ctx.headerMap();
 
         LOGGER.info("[REQUEST]\n" +
                 "    key = " + path + "\n" +
@@ -98,7 +100,7 @@ public final class GetHandler implements Route.Handler {
         // metrics
         if (rateLimitResult.countMetrics()) {
             BytebinServer.recordRequest("GET", ctx);
-            this.logHandler.logAttemptedGet(path, userAgent, origin, ipAddress);
+            this.logHandler.logAttemptedGet(path, new LogHandler.User(userAgent, origin, host, ipAddress, headers));
         }
 
         // request the file from the cache async
@@ -107,7 +109,11 @@ public final class GetHandler implements Route.Handler {
                 throw new StatusCodeException(StatusCode.NOT_FOUND, "Invalid path");
             }
 
-            this.logHandler.logGet(path, userAgent, origin, ipAddress, content.getContentLength(), content.getContentType(), content.getExpiry());
+            this.logHandler.logGet(
+                    path,
+                    new LogHandler.User(userAgent, origin, host, ipAddress, headers),
+                    new LogHandler.ContentInfo(content.getContentLength(), content.getContentType(), content.getExpiry())
+            );
 
             ctx.setResponseHeader("Last-Modified", Instant.ofEpochMilli(content.getLastModified()));
 
@@ -138,7 +144,7 @@ public final class GetHandler implements Route.Handler {
 
             LOGGER.warn("[REQUEST] Request for 'key = " + path + "' was made with incompatible Accept-Encoding headers! " +
                     "Content-Encoding = " + contentEncodingStrings + ", " +
-                    "Accept-Encoding = " + acceptedEncoding + "");
+                    "Accept-Encoding = " + acceptedEncoding);
 
             // if it's compressed using gzip, we will uncompress on the server side
             if (contentEncodingStrings.size() == 1 && contentEncodingStrings.get(0).equals(ContentEncoding.GZIP)) {

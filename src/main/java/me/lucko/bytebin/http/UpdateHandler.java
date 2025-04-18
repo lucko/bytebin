@@ -43,7 +43,9 @@ import org.apache.logging.log4j.Logger;
 
 import javax.annotation.Nonnull;
 import java.util.Date;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 
 public final class UpdateHandler implements Route.Handler {
@@ -101,6 +103,12 @@ public final class UpdateHandler implements Route.Handler {
         }
         String authKey = authHeader.substring("Bearer ".length());
 
+        // get the user agent & origin headers
+        String userAgent = ctx.header("User-Agent").value("null");
+        String origin = ctx.header("Origin").value("null");
+        String host = ctx.getHostAndPort();
+        Map<String, String> headers = ctx.headerMap();
+
         return this.contentLoader.get(path).handleAsync((oldContent, throwable) -> {
             if (throwable != null || oldContent == null || oldContent.getKey() == null || oldContent.getContent().length == 0) {
                 // use a generic response to prevent use of this endpoint to search for valid content
@@ -132,11 +140,6 @@ public final class UpdateHandler implements Route.Handler {
                 throw new StatusCodeException(StatusCode.REQUEST_ENTITY_TOO_LARGE, "Content too large");
             }
 
-            // get the user agent & origin headers
-            String userAgent = ctx.header("User-Agent").value("null");
-            String origin = ctx.header("Origin").value("null");
-            String host = ctx.getHostAndPort();
-
             Date newExpiry = this.expiryHandler.getExpiry(userAgent, origin, host);
 
             LOGGER.info("[PUT]\n" +
@@ -154,7 +157,11 @@ public final class UpdateHandler implements Route.Handler {
             // metrics
             if (rateLimitResult.countMetrics()) {
                 BytebinServer.recordRequest("PUT", ctx);
-                this.logHandler.logPost(path, userAgent, origin, ipAddress, buf.length, newContentType, newExpiry);
+                this.logHandler.logPost(
+                        path,
+                        new LogHandler.User(userAgent, origin, host, ipAddress, headers),
+                        new LogHandler.ContentInfo(buf.length, newContentType, newExpiry)
+                );
             }
 
             // update the content instance with the new data

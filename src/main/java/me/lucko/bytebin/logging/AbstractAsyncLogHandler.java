@@ -63,18 +63,18 @@ public abstract class AbstractAsyncLogHandler implements LogHandler {
     }
 
     @Override
-    public void logAttemptedGet(String key, String userAgent, String origin, String ip) {
-        this.queue.offer(new AttemptedGetEvent(key, userAgent, origin, ip));
+    public void logAttemptedGet(String key, User user) {
+        this.queue.offer(new AttemptedGetEvent(key, user));
     }
 
     @Override
-    public void logGet(String key, String userAgent, String origin, String ip, int contentLength, String contentType, Date contentExpiry) {
-        this.queue.offer(new GetEvent(key, userAgent, origin, ip, contentLength, contentType, contentExpiry));
+    public void logGet(String key, User user, ContentInfo content) {
+        this.queue.offer(new GetEvent(key, user, content));
     }
 
     @Override
-    public void logPost(String key, String userAgent, String origin, String ip, int contentLength, String contentType, Date contentExpiry) {
-        this.queue.offer(new PostEvent(key, userAgent, origin, ip, contentLength, contentType, contentExpiry));
+    public void logPost(String key, User user, ContentInfo content) {
+        this.queue.offer(new PostEvent(key, user, content));
     }
 
     public static abstract class Event {
@@ -88,58 +88,38 @@ public abstract class AbstractAsyncLogHandler implements LogHandler {
 
     public static final class AttemptedGetEvent extends Event {
         private final String key;
-        private final String userAgent;
-        private final String origin;
-        private final String ip;
+        private final User user;
 
-        public AttemptedGetEvent(String key, String userAgent, String origin, String ip) {
+        public AttemptedGetEvent(String key, User user) {
             super("attempted-get");
             this.key = key;
-            this.userAgent = userAgent;
-            this.origin = origin;
-            this.ip = ip;
+            this.user = user;
         }
     }
 
     public static final class GetEvent extends Event {
         private final String key;
-        private final String userAgent;
-        private final String origin;
-        private final String ip;
-        private final int contentLength;
-        private final String contentType;
-        private final Date contentExpiry;
+        private final User user;
+        private final ContentInfo content;
 
-        public GetEvent(String key, String userAgent, String origin, String ip, int contentLength, String contentType, Date contentExpiry) {
+        public GetEvent(String key, User user, ContentInfo content) {
             super("get");
             this.key = key;
-            this.userAgent = userAgent;
-            this.origin = origin;
-            this.ip = ip;
-            this.contentLength = contentLength;
-            this.contentType = contentType;
-            this.contentExpiry = contentExpiry;
+            this.user = user;
+            this.content = content;
         }
     }
 
     public static final class PostEvent extends Event {
         private final String key;
-        private final String userAgent;
-        private final String origin;
-        private final String ip;
-        private final int contentLength;
-        private final String contentType;
-        private final Date contentExpiry;
+        private final User user;
+        private final ContentInfo content;
 
-        public PostEvent(String key, String userAgent, String origin, String ip, int contentLength, String contentType, Date contentExpiry) {
+        public PostEvent(String key, User user, ContentInfo content) {
             super("post");
             this.key = key;
-            this.userAgent = userAgent;
-            this.origin = origin;
-            this.ip = ip;
-            this.contentLength = contentLength;
-            this.contentType = contentType;
-            this.contentExpiry = contentExpiry;
+            this.user = user;
+            this.content = content;
         }
     }
 

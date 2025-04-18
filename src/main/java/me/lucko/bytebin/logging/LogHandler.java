@@ -26,31 +26,32 @@
 package me.lucko.bytebin.logging;
 
 import java.util.Date;
+import java.util.Map;
 
 public interface LogHandler extends AutoCloseable {
 
-    void logAttemptedGet(String key, String userAgent, String origin, String ip);
+    void logAttemptedGet(String key, User user);
 
-    void logGet(String key, String userAgent, String origin, String ip, int contentLength, String contentType, Date contentExpiry);
+    void logGet(String key, User user, ContentInfo contentInfo);
 
-    void logPost(String key, String userAgent, String origin, String ip, int contentLength, String contentType, Date contentExpiry);
+    void logPost(String key, User user, ContentInfo contentInfo);
 
     @Override
     void close();
 
     class Stub implements LogHandler {
         @Override
-        public void logAttemptedGet(String key, String userAgent, String origin, String ip) {
+        public void logAttemptedGet(String key, User user) {
 
         }
 
         @Override
-        public void logGet(String key, String userAgent, String origin, String ip, int contentLength, String contentType, Date contentExpiry) {
+        public void logGet(String key, User user, ContentInfo contentInfo) {
 
         }
 
         @Override
-        public void logPost(String key, String userAgent, String origin, String ip, int contentLength, String contentType, Date contentExpiry) {
+        public void logPost(String key, User user, ContentInfo contentInfo) {
 
         }
 
@@ -59,5 +60,8 @@ public interface LogHandler extends AutoCloseable {
 
         }
     }
+
+    record User(String userAgent, String origin, String host, String ip, Map<String, String> headers) {}
+    record ContentInfo(int contentLength, String contentType, Date contentExpiry) {}
 
 }

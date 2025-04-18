@@ -115,6 +115,7 @@ public final class PostHandler implements Route.Handler {
         String userAgent = ctx.header("User-Agent").value("null");
         String origin = ctx.header("Origin").value("null");
         String host = ctx.getHostAndPort();
+        Map<String, String> headers = ctx.headerMap();
 
         Date expiry = this.expiryHandler.getExpiry(userAgent, origin, host);
 
@@ -149,7 +150,11 @@ public final class PostHandler implements Route.Handler {
             BytebinServer.recordRequest("POST", metricsLabel);
             CONTENT_SIZE_SUMMARY.labels(metricsLabel).observe(content.length);
 
-            this.logHandler.logPost(key, userAgent, origin, ipAddress, content.length, contentType, expiry);
+            this.logHandler.logPost(
+                    key,
+                    new LogHandler.User(userAgent, origin, host, ipAddress, headers),
+                    new LogHandler.ContentInfo(content.length, contentType, expiry)
+            );
         }
 
         // record the content in the cache
