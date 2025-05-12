@@ -34,7 +34,7 @@
             <plugin>
                 <groupId>io.jooby</groupId>
                 <artifactId>jooby-maven-plugin</artifactId>
-                <version>3.7.0</version>
+                <version>3.8.1</version>
             </plugin>
             <plugin>
                 <artifactId>maven-shade-plugin</artifactId>
