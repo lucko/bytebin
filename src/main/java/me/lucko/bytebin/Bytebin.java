@@ -161,7 +161,7 @@ public final class Bytebin implements AutoCloseable {
                 : new LogHandler.Stub();
 
         // setup the web server
-        this.server = (BytebinServer) Jooby.createApp(new String[0], ExecutionMode.EVENT_LOOP, () -> new BytebinServer(
+        this.server = (BytebinServer) Jooby.createApp(ExecutionMode.EVENT_LOOP, () -> new BytebinServer(
                 storageHandler,
                 contentLoader,
                 this.logHandler,
