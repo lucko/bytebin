@@ -71,7 +71,7 @@ public final class GetHandler implements Route.Handler {
     public CompletableFuture<byte[]> apply(@Nonnull Context ctx) {
         // get the requested path
         String path = ctx.path("id").value();
-        if (path.trim().isEmpty() || path.contains(".") || TokenGenerator.INVALID_TOKEN_PATTERN.matcher(path).find()) {
+        if (path.trim().isEmpty() || TokenGenerator.INVALID_TOKEN_PATTERN.matcher(path).find()) {
             throw new StatusCodeException(StatusCode.NOT_FOUND, "Invalid path");
         }
 
