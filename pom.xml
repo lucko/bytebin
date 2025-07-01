@@ -78,7 +78,7 @@
             <dependency>
                 <groupId>software.amazon.awssdk</groupId>
                 <artifactId>bom</artifactId>
-                <version>2.31.71</version>
+                <version>2.31.74</version>
                 <type>pom</type>
                 <scope>import</scope>
             </dependency>
@@ -136,7 +136,7 @@
         <dependency>
             <groupId>org.xerial</groupId>
             <artifactId>sqlite-jdbc</artifactId>
-            <version>3.50.1.0</version>
+            <version>3.50.2.0</version>
         </dependency>
 
         <dependency>
