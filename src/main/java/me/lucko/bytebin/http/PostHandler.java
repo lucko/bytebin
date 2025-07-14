@@ -107,6 +107,11 @@ public final class PostHandler implements Route.Handler {
         // generate a key
         String key = this.contentTokenGenerator.generate();
 
+        // check if key is already in use
+        while (!this.storageHandler.load(key).equals(Content.EMPTY_CONTENT)) {
+            key = this.contentTokenGenerator.generate();
+        }
+
         // get the content encodings
         // https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/Content-Encoding
         List<String> encodings = ContentEncoding.getContentEncoding(ctx.header("Content-Encoding").valueOrNull());
@@ -168,6 +173,7 @@ public final class PostHandler implements Route.Handler {
         }
 
         String encoding = String.join(",", encodings);
+        String finalKey = key;
         this.storageHandler.getExecutor().execute(() -> {
             byte[] buf = content;
             if (compressServerSide) {
@@ -176,7 +182,7 @@ public final class PostHandler implements Route.Handler {
 
             // add directly to the cache
             // it's quite likely that the file will be requested only a few seconds after it is uploaded
-            Content c = new Content(key, contentType, expiry, System.currentTimeMillis(), authKey != null, authKey, encoding, buf);
+            Content c = new Content(finalKey, contentType, expiry, System.currentTimeMillis(), authKey != null, authKey, encoding, buf);
             future.complete(c);
 
             try {
