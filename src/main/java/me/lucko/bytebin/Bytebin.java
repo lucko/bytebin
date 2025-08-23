@@ -29,6 +29,9 @@ import com.google.common.collect.ImmutableSet;
 import com.google.common.util.concurrent.ThreadFactoryBuilder;
 import io.jooby.ExecutionMode;
 import io.jooby.Jooby;
+import io.jooby.Server;
+import io.jooby.ServerOptions;
+import io.jooby.jetty.JettyServer;
 import io.prometheus.client.hotspot.DefaultExports;
 import me.lucko.bytebin.content.Content;
 import me.lucko.bytebin.content.ContentIndexDatabase;
@@ -98,7 +101,7 @@ public final class Bytebin implements AutoCloseable {
     private final LogHandler logHandler;
 
     /** The web server instance */
-    private final BytebinServer server;
+    private final Server server;
 
     public Bytebin(Configuration config) throws Exception {
         // setup simple logger
@@ -160,13 +163,20 @@ public final class Bytebin implements AutoCloseable {
                 ? new HttpLogHandler(loggingHttpUri, config.getInt(Option.LOGGING_HTTP_FLUSH_PERIOD, 10))
                 : new LogHandler.Stub();
 
+        long maxContentLength = Content.MEGABYTE_LENGTH * config.getInt(Option.MAX_CONTENT_LENGTH, 10);
+
         // setup the web server
-        this.server = (BytebinServer) Jooby.createApp(ExecutionMode.EVENT_LOOP, () -> new BytebinServer(
+        ServerOptions serverOpts = new ServerOptions();
+        serverOpts.setHost(config.getString(Option.HOST, "0.0.0.0"));
+        serverOpts.setPort(config.getInt(Option.PORT, 8080));
+        serverOpts.setCompressionLevel(null);
+        serverOpts.setMaxRequestSize((int) maxContentLength);
+
+        this.server = new JettyServer(serverOpts);
+        this.server.start(Jooby.createApp(this.server, ExecutionMode.EVENT_LOOP, () -> new BytebinServer(
                 storageHandler,
                 contentLoader,
                 this.logHandler,
-                config.getString(Option.HOST, "0.0.0.0"),
-                config.getInt(Option.PORT, 8080),
                 metrics,
                 new RateLimitHandler(config.getStringList(Option.RATELIMIT_API_KEYS)),
                 new RateLimiter(
@@ -185,12 +195,11 @@ public final class Bytebin implements AutoCloseable {
                         config.getInt(Option.READ_RATE_LIMIT, 30)
                 ),
                 new TokenGenerator(config.getInt(Option.KEY_LENGTH, 7)),
-                (Content.MEGABYTE_LENGTH * config.getInt(Option.MAX_CONTENT_LENGTH, 10)),
+                maxContentLength,
                 expiryHandler,
                 config.getStringMap(Option.HTTP_HOST_ALIASES),
                 ImmutableSet.copyOf(config.getStringList(Option.ADMIN_API_KEYS))
-        ));
-        this.server.start();
+        )));
 
         // schedule invalidation task
         if (expiryHandler.hasExpiryTimes() || metrics) {
