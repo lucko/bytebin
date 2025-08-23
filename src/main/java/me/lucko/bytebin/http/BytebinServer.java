@@ -26,11 +26,10 @@
 package me.lucko.bytebin.http;
 
 import io.jooby.Context;
-import io.jooby.ExecutionMode;
 import io.jooby.Jooby;
 import io.jooby.MediaType;
 import io.jooby.ReactiveSupport;
-import io.jooby.ServerOptions;
+import io.jooby.RouterOptions;
 import io.jooby.StatusCode;
 import io.jooby.exception.StatusCodeException;
 import io.jooby.handler.AssetHandler;
@@ -67,16 +66,8 @@ public class BytebinServer extends Jooby {
             .labelNames("method", "useragent")
             .register();
 
-    public BytebinServer(ContentStorageHandler storageHandler, ContentLoader contentLoader, LogHandler logHandler, String host, int port, boolean metrics, RateLimitHandler rateLimitHandler, RateLimiter postRateLimiter, RateLimiter putRateLimiter, RateLimiter readRateLimiter, TokenGenerator contentTokenGenerator, long maxContentLength, ExpiryHandler expiryHandler, Map<String, String> hostAliases, Set<String> adminApiKeys) {
-        ServerOptions serverOpts = new ServerOptions();
-        serverOpts.setHost(host);
-        serverOpts.setPort(port);
-        serverOpts.setCompressionLevel(null);
-        serverOpts.setMaxRequestSize((int) maxContentLength);
-        setServerOptions(serverOpts);
-
-        setExecutionMode(ExecutionMode.EVENT_LOOP);
-        setTrustProxy(true);
+    public BytebinServer(ContentStorageHandler storageHandler, ContentLoader contentLoader, LogHandler logHandler, boolean metrics, RateLimitHandler rateLimitHandler, RateLimiter postRateLimiter, RateLimiter putRateLimiter, RateLimiter readRateLimiter, TokenGenerator contentTokenGenerator, long maxContentLength, ExpiryHandler expiryHandler, Map<String, String> hostAliases, Set<String> adminApiKeys) {
+        setRouterOptions(new RouterOptions().setTrustProxy(true));
 
         use(ReactiveSupport.concurrent());
 
