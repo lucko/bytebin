@@ -122,7 +122,7 @@ public class BytebinServer extends Jooby {
                     .setUseCredentials(false)
                     .setMaxAge(Duration.ofDays(1))
                     .setMethods("POST", "PUT")
-                    .setHeaders("Content-Type", "Accept", "Origin", "Content-Encoding", "Allow-Modification")));
+                    .setHeaders("Content-Type", "Accept", "Origin", "Content-Encoding", "Allow-Modification", "Bytebin-Api-Key", "Bytebin-Forwarded-For")));
 
             PostHandler postHandler = new PostHandler(this, logHandler, postRateLimiter, rateLimitHandler, storageHandler, contentLoader, contentTokenGenerator, maxContentLength, expiryHandler, hostAliases);
             post("/post", postHandler);
@@ -134,7 +134,7 @@ public class BytebinServer extends Jooby {
                     .setUseCredentials(false)
                     .setMaxAge(Duration.ofDays(1))
                     .setMethods("GET", "PUT")
-                    .setHeaders("Content-Type", "Accept", "Origin", "Content-Encoding", "Authorization")));
+                    .setHeaders("Content-Type", "Accept", "Origin", "Content-Encoding", "Authorization", "Bytebin-Api-Key", "Bytebin-Forwarded-For")));
 
             get("/{id:[a-zA-Z0-9]+}", new GetHandler(this, logHandler, readRateLimiter, readNotFoundRateLimiter, rateLimitHandler, contentLoader));
             put("/{id:[a-zA-Z0-9]+}", new UpdateHandler(this, logHandler, putRateLimiter, rateLimitHandler, storageHandler, contentLoader, maxContentLength, expiryHandler));
