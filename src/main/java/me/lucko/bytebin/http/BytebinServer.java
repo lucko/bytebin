@@ -66,6 +66,12 @@ public class BytebinServer extends Jooby {
             .labelNames("method", "useragent")
             .register();
 
+    private static final Counter REJECTED_REQUESTS_COUNTER = Counter.build()
+            .name("bytebin_rejected_requests_total")
+            .help("The amount of rejected requests")
+            .labelNames("method", "reason", "useragent")
+            .register();
+
     public BytebinServer(ContentStorageHandler storageHandler, ContentLoader contentLoader, LogHandler logHandler, boolean metrics, RateLimitHandler rateLimitHandler, RateLimiter postRateLimiter, RateLimiter putRateLimiter, RateLimiter readRateLimiter, TokenGenerator contentTokenGenerator, long maxContentLength, ExpiryHandler expiryHandler, Map<String, String> hostAliases, Set<String> adminApiKeys) {
         setRouterOptions(new RouterOptions().setTrustProxy(true));
 
@@ -159,6 +165,14 @@ public class BytebinServer extends Jooby {
 
     public static void recordRequest(String method, String metricsLabel) {
         REQUESTS_COUNTER.labels(method, metricsLabel).inc();
+    }
+
+    public static void recordRejectedRequest(String method, String reason, Context ctx) {
+        recordRejectedRequest(method, reason, getMetricsLabel(ctx));
+    }
+
+    public static void recordRejectedRequest(String method, String reason, String metricsLabel) {
+        REJECTED_REQUESTS_COUNTER.labels(method, reason, metricsLabel).inc();
     }
 
 }

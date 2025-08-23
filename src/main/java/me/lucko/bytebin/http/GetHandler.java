@@ -72,11 +72,12 @@ public final class GetHandler implements Route.Handler {
         // get the requested path
         String path = ctx.path("id").value();
         if (path.trim().isEmpty() || TokenGenerator.INVALID_TOKEN_PATTERN.matcher(path).find()) {
+            BytebinServer.recordRejectedRequest("GET", "invalid_path", ctx);
             throw new StatusCodeException(StatusCode.NOT_FOUND, "Invalid path");
         }
 
         // check rate limits
-        RateLimitHandler.Result rateLimitResult = this.rateLimitHandler.getIpAddressAndCheckRateLimit(ctx, this.rateLimiter);
+        RateLimitHandler.Result rateLimitResult = this.rateLimitHandler.getIpAddressAndCheckRateLimit(ctx, this.rateLimiter, "GET");
         String ipAddress = rateLimitResult.ipAddress();
 
         // get the encodings supported by the requester
@@ -99,21 +100,24 @@ public final class GetHandler implements Route.Handler {
 
         // metrics
         if (rateLimitResult.countMetrics()) {
-            BytebinServer.recordRequest("GET", ctx);
             this.logHandler.logAttemptedGet(path, new LogHandler.User(userAgent, origin, host, ipAddress, headers));
         }
 
         // request the file from the cache async
         return this.contentLoader.get(path).handleAsync((content, throwable) -> {
             if (throwable != null || content == null || content.getKey() == null || content.getContent().length == 0) {
+                BytebinServer.recordRejectedRequest("GET", "not_found", ctx);
                 throw new StatusCodeException(StatusCode.NOT_FOUND, "Invalid path");
             }
 
-            this.logHandler.logGet(
-                    path,
-                    new LogHandler.User(userAgent, origin, host, ipAddress, headers),
-                    new LogHandler.ContentInfo(content.getContentLength(), content.getContentType(), content.getExpiry())
-            );
+            if (rateLimitResult.countMetrics()) {
+                BytebinServer.recordRequest("GET", ctx);
+                this.logHandler.logGet(
+                        path,
+                        new LogHandler.User(userAgent, origin, host, ipAddress, headers),
+                        new LogHandler.ContentInfo(content.getContentLength(), content.getContentType(), content.getExpiry())
+                );
+            }
 
             ctx.setResponseHeader("Last-Modified", Instant.ofEpochMilli(content.getLastModified()));
 

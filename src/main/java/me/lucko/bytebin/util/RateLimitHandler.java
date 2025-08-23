@@ -29,6 +29,8 @@ import com.google.common.collect.ImmutableSet;
 import io.jooby.Context;
 import io.jooby.StatusCode;
 import io.jooby.exception.StatusCodeException;
+import io.prometheus.client.Counter;
+import me.lucko.bytebin.http.BytebinServer;
 
 import java.util.Collection;
 import java.util.Set;
@@ -63,7 +65,7 @@ public final class RateLimitHandler {
         return false;
     }
 
-    public Result getIpAddressAndCheckRateLimit(Context ctx, RateLimiter limiter) {
+    public Result getIpAddressAndCheckRateLimit(Context ctx, RateLimiter limiter, String method) {
         // get the connection IP address according to cloudflare, fallback to
         // the remote address
         String ipAddress = ctx.header("x-real-ip").valueOrNull();
@@ -87,6 +89,7 @@ public final class RateLimitHandler {
 
         // check rate limits
         if (limiter.check(ipAddress)) {
+            BytebinServer.recordRejectedRequest(method, "rate_limited", ctx);
             throw new StatusCodeException(StatusCode.TOO_MANY_REQUESTS, "Rate limit exceeded");
         }
 

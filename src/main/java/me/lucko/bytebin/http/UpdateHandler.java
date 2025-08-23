@@ -77,7 +77,8 @@ public final class UpdateHandler implements Route.Handler {
     public CompletableFuture<Void> apply(@Nonnull Context ctx) {
         // get the requested path
         String path = ctx.path("id").value();
-        if (path.trim().isEmpty() || path.contains(".") || TokenGenerator.INVALID_TOKEN_PATTERN.matcher(path).find()) {
+        if (path.trim().isEmpty() || TokenGenerator.INVALID_TOKEN_PATTERN.matcher(path).find()) {
+            BytebinServer.recordRejectedRequest("PUT", "invalid_path", ctx);
             throw new StatusCodeException(StatusCode.NOT_FOUND, "Invalid path");
         }
 
@@ -85,11 +86,12 @@ public final class UpdateHandler implements Route.Handler {
 
         // ensure something was actually posted
         if (newContent.length == 0) {
+            BytebinServer.recordRejectedRequest("PUT", "missing_content", ctx);
             throw new StatusCodeException(StatusCode.BAD_REQUEST, "Missing content");
         }
 
         // check rate limits
-        RateLimitHandler.Result rateLimitResult = this.rateLimitHandler.getIpAddressAndCheckRateLimit(ctx, this.rateLimiter);
+        RateLimitHandler.Result rateLimitResult = this.rateLimitHandler.getIpAddressAndCheckRateLimit(ctx, this.rateLimiter, "PUT");
         String ipAddress = rateLimitResult.ipAddress();
 
         String authHeader = ctx.header("Authorization").valueOrNull();
@@ -110,6 +112,7 @@ public final class UpdateHandler implements Route.Handler {
 
         return this.contentLoader.get(path).handleAsync((oldContent, throwable) -> {
             if (throwable != null || oldContent == null || oldContent.getKey() == null || oldContent.getContent().length == 0) {
+                BytebinServer.recordRejectedRequest("PUT", "not_found", ctx);
                 // use a generic response to prevent use of this endpoint to search for valid content
                 throw new StatusCodeException(StatusCode.FORBIDDEN, "Incorrect modification key");
             }
@@ -136,6 +139,7 @@ public final class UpdateHandler implements Route.Handler {
 
             // check max content length
             if (buf.length > this.maxContentLength) {
+                BytebinServer.recordRejectedRequest("PUT", "content_too_large", ctx);
                 throw new StatusCodeException(StatusCode.REQUEST_ENTITY_TOO_LARGE, "Content too large");
             }
 

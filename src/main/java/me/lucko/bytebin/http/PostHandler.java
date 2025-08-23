@@ -94,11 +94,12 @@ public final class PostHandler implements Route.Handler {
 
         // ensure something was actually posted
         if (content == null || content.length == 0) {
+            BytebinServer.recordRejectedRequest("POST", "missing_content", ctx);
             throw new StatusCodeException(StatusCode.BAD_REQUEST, "Missing content");
         }
 
         // check rate limits
-        RateLimitHandler.Result rateLimitResult = this.rateLimitHandler.getIpAddressAndCheckRateLimit(ctx, this.rateLimiter);
+        RateLimitHandler.Result rateLimitResult = this.rateLimitHandler.getIpAddressAndCheckRateLimit(ctx, this.rateLimiter, "POST");
         String ipAddress = rateLimitResult.ipAddress();
 
         // determine the content type
@@ -121,6 +122,7 @@ public final class PostHandler implements Route.Handler {
 
         // check max content length
         if (content.length > this.maxContentLength) {
+            BytebinServer.recordRejectedRequest("POST", "content_too_large", ctx);
             throw new StatusCodeException(StatusCode.REQUEST_ENTITY_TOO_LARGE, "Content too large");
         }
 
