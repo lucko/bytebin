@@ -147,7 +147,7 @@ public final class PostHandler implements Route.Handler {
         );
 
         // metrics
-        if (rateLimitResult.countMetrics()) {
+        if (rateLimitResult.isRealUser()) {
             String metricsLabel = BytebinServer.getMetricsLabel(ctx);
             BytebinServer.recordRequest("POST", metricsLabel);
             CONTENT_SIZE_SUMMARY.labels(metricsLabel).observe(content.length);

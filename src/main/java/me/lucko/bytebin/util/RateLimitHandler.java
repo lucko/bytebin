@@ -29,7 +29,6 @@ import com.google.common.collect.ImmutableSet;
 import io.jooby.Context;
 import io.jooby.StatusCode;
 import io.jooby.exception.StatusCodeException;
-import io.prometheus.client.Counter;
 import me.lucko.bytebin.http.BytebinServer;
 
 import java.util.Collection;
@@ -88,7 +87,7 @@ public final class RateLimitHandler {
         }
 
         // check rate limits
-        if (limiter.check(ipAddress)) {
+        if (limiter.incrementAndCheck(ipAddress)) {
             BytebinServer.recordRejectedRequest(method, "rate_limited", ctx);
             throw new StatusCodeException(StatusCode.TOO_MANY_REQUESTS, "Rate limit exceeded");
         }
@@ -98,10 +97,10 @@ public final class RateLimitHandler {
 
     public record Result(String ipAddress, boolean validApiKey, boolean forwarded) {
 
-        public boolean countMetrics() {
-            // if API key not provided, record metrics
-            // if API key provided but forwarded IP known, record metrics
-            // else, don't record metrics
+        public boolean isRealUser() {
+            // if API key not provided, assume real user
+            // if API key provided but forwarded IP known, assume real user
+            // else, assume not real user
             return !this.validApiKey || this.forwarded;
         }
     }

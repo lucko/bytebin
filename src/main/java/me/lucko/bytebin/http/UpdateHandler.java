@@ -158,7 +158,7 @@ public final class UpdateHandler implements Route.Handler {
             );
 
             // metrics
-            if (rateLimitResult.countMetrics()) {
+            if (rateLimitResult.isRealUser()) {
                 BytebinServer.recordRequest("PUT", ctx);
                 this.logHandler.logPost(
                         path,

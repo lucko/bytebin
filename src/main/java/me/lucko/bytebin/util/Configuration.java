@@ -178,7 +178,9 @@ public class Configuration {
         UPDATE_RATE_LIMIT_PERIOD("updateRateLimitPeriodMins", "bytebin.ratelimit.update.period"), // minutes
         UPDATE_RATE_LIMIT("updateRateLimit", "bytebin.ratelimit.update.amount"),
         READ_RATE_LIMIT_PERIOD("readRateLimitPeriodMins", "bytebin.ratelimit.read.period"), // minutes
-        READ_RATE_LIMIT("readRateLimit", "bytebin.ratelimit.read.amount");
+        READ_RATE_LIMIT("readRateLimit", "bytebin.ratelimit.read.amount"),
+        READ_NOTFOUND_RATE_LIMIT_PERIOD("readFailedRateLimitPeriodMins", "bytebin.ratelimit.read.notfound.period"), // minutes
+        READ_NOTFOUND_RATE_LIMIT("readFailedRateLimit", "bytebin.ratelimit.read.notfound.amount");
 
         final String keyJson;
         final String keySystemProperty;

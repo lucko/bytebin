@@ -72,7 +72,7 @@ public class BytebinServer extends Jooby {
             .labelNames("method", "reason", "useragent")
             .register();
 
-    public BytebinServer(ContentStorageHandler storageHandler, ContentLoader contentLoader, LogHandler logHandler, boolean metrics, RateLimitHandler rateLimitHandler, RateLimiter postRateLimiter, RateLimiter putRateLimiter, RateLimiter readRateLimiter, TokenGenerator contentTokenGenerator, long maxContentLength, ExpiryHandler expiryHandler, Map<String, String> hostAliases, Set<String> adminApiKeys) {
+    public BytebinServer(ContentStorageHandler storageHandler, ContentLoader contentLoader, LogHandler logHandler, boolean metrics, RateLimitHandler rateLimitHandler, RateLimiter postRateLimiter, RateLimiter putRateLimiter, RateLimiter readRateLimiter, RateLimiter readNotFoundRateLimiter, TokenGenerator contentTokenGenerator, long maxContentLength, ExpiryHandler expiryHandler, Map<String, String> hostAliases, Set<String> adminApiKeys) {
         setRouterOptions(new RouterOptions().setTrustProxy(true));
 
         use(ReactiveSupport.concurrent());
@@ -136,7 +136,7 @@ public class BytebinServer extends Jooby {
                     .setMethods("GET", "PUT")
                     .setHeaders("Content-Type", "Accept", "Origin", "Content-Encoding", "Authorization")));
 
-            get("/{id:[a-zA-Z0-9]+}", new GetHandler(this, logHandler, readRateLimiter, rateLimitHandler, contentLoader));
+            get("/{id:[a-zA-Z0-9]+}", new GetHandler(this, logHandler, readRateLimiter, readNotFoundRateLimiter, rateLimitHandler, contentLoader));
             put("/{id:[a-zA-Z0-9]+}", new UpdateHandler(this, logHandler, putRateLimiter, rateLimitHandler, storageHandler, contentLoader, maxContentLength, expiryHandler));
         });
 

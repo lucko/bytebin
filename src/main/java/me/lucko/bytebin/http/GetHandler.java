@@ -56,13 +56,15 @@ public final class GetHandler implements Route.Handler {
     private final BytebinServer server;
     private final LogHandler logHandler;
     private final RateLimiter rateLimiter;
+    private final RateLimiter notFoundRateLimiter;
     private final RateLimitHandler rateLimitHandler;
     private final ContentLoader contentLoader;
 
-    public GetHandler(BytebinServer server, LogHandler logHandler, RateLimiter rateLimiter, RateLimitHandler rateLimitHandler, ContentLoader contentLoader) {
+    public GetHandler(BytebinServer server, LogHandler logHandler, RateLimiter rateLimiter, RateLimiter notFoundRateLimiter, RateLimitHandler rateLimitHandler, ContentLoader contentLoader) {
         this.server = server;
         this.logHandler = logHandler;
         this.rateLimiter = rateLimiter;
+        this.notFoundRateLimiter = notFoundRateLimiter;
         this.rateLimitHandler = rateLimitHandler;
         this.contentLoader = contentLoader;
     }
@@ -98,19 +100,26 @@ public final class GetHandler implements Route.Handler {
                 "    host = " + host + "\n"
         );
 
-        // metrics
-        if (rateLimitResult.countMetrics()) {
+        if (rateLimitResult.isRealUser()) {
             this.logHandler.logAttemptedGet(path, new LogHandler.User(userAgent, origin, host, ipAddress, headers));
+
+            if (this.notFoundRateLimiter.check(rateLimitResult.ipAddress())) {
+                BytebinServer.recordRejectedRequest("GET", "rate_limited_get_not_found", ctx);
+                throw new StatusCodeException(StatusCode.TOO_MANY_REQUESTS, "Rate limit exceeded");
+            }
         }
 
         // request the file from the cache async
         return this.contentLoader.get(path).handleAsync((content, throwable) -> {
             if (throwable != null || content == null || content.getKey() == null || content.getContent().length == 0) {
+                if (rateLimitResult.isRealUser()) {
+                    this.notFoundRateLimiter.increment(rateLimitResult.ipAddress());
+                }
                 BytebinServer.recordRejectedRequest("GET", "not_found", ctx);
                 throw new StatusCodeException(StatusCode.NOT_FOUND, "Invalid path");
             }
 
-            if (rateLimitResult.countMetrics()) {
+            if (rateLimitResult.isRealUser()) {
                 BytebinServer.recordRequest("GET", ctx);
                 this.logHandler.logGet(
                         path,

@@ -194,6 +194,11 @@ public final class Bytebin implements AutoCloseable {
                         config.getInt(Option.READ_RATE_LIMIT_PERIOD, 2),
                         config.getInt(Option.READ_RATE_LIMIT, 30)
                 ),
+                new RateLimiter(
+                        // by default, allow notfound/404 reads at a rate of 10 times every 10 minutes (every 1m)
+                        config.getInt(Option.READ_NOTFOUND_RATE_LIMIT_PERIOD, 10),
+                        config.getInt(Option.READ_NOTFOUND_RATE_LIMIT, 10)
+                ),
                 new TokenGenerator(config.getInt(Option.KEY_LENGTH, 7)),
                 maxContentLength,
                 expiryHandler,
