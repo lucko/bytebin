@@ -87,7 +87,7 @@ public final class RateLimitHandler {
         }
 
         // check rate limits
-        if (limiter.incrementAndCheck(ipAddress)) {
+        if (limiter.checkAndIncrement(ipAddress)) {
             BytebinServer.recordRejectedRequest(method, "rate_limited", ctx);
             throw new StatusCodeException(StatusCode.TOO_MANY_REQUESTS, "Rate limit exceeded");
         }

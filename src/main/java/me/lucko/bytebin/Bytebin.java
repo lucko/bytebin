@@ -50,8 +50,9 @@ import me.lucko.bytebin.util.Configuration.Option;
 import me.lucko.bytebin.util.EnvVars;
 import me.lucko.bytebin.util.ExceptionHandler;
 import me.lucko.bytebin.util.ExpiryHandler;
+import me.lucko.bytebin.util.ExponentialRateLimiter;
 import me.lucko.bytebin.util.RateLimitHandler;
-import me.lucko.bytebin.util.RateLimiter;
+import me.lucko.bytebin.util.SimpleRateLimiter;
 import me.lucko.bytebin.util.TokenGenerator;
 import org.apache.logging.log4j.Level;
 import org.apache.logging.log4j.LogManager;
@@ -179,25 +180,31 @@ public final class Bytebin implements AutoCloseable {
                 this.logHandler,
                 metrics,
                 new RateLimitHandler(config.getStringList(Option.RATELIMIT_API_KEYS)),
-                new RateLimiter(
+                /* POST rate limit */
+                new SimpleRateLimiter(
                         // by default, allow posts at a rate of 30 times every 10 minutes (every 20s)
-                        config.getInt(Option.POST_RATE_LIMIT_PERIOD, 10),
-                        config.getInt(Option.POST_RATE_LIMIT, 30)
+                        config.getInt(Option.POST_RATE_LIMIT, 30),
+                        config.getInt(Option.POST_RATE_LIMIT_PERIOD, 10)
                 ),
-                new RateLimiter(
-                        // by default, allow updates at a rate of 20 times every 2 minutes (every 6s)
-                        config.getInt(Option.UPDATE_RATE_LIMIT_PERIOD, 2),
-                        config.getInt(Option.UPDATE_RATE_LIMIT, 20)
+                /* PUT rate limit */
+                new SimpleRateLimiter(
+                        // by default, allow updates at a rate of 30 times every 5 minutes (every 10s)
+                        config.getInt(Option.UPDATE_RATE_LIMIT, 30),
+                        config.getInt(Option.UPDATE_RATE_LIMIT_PERIOD, 5)
                 ),
-                new RateLimiter(
+                /* GET rate limit */
+                new SimpleRateLimiter(
                         // by default, allow reads at a rate of 30 times every 2 minutes (every 4s)
-                        config.getInt(Option.READ_RATE_LIMIT_PERIOD, 2),
-                        config.getInt(Option.READ_RATE_LIMIT, 30)
+                        config.getInt(Option.READ_RATE_LIMIT, 30),
+                        config.getInt(Option.READ_RATE_LIMIT_PERIOD, 2)
                 ),
-                new RateLimiter(
-                        // by default, allow notfound/404 reads at a rate of 10 times every 10 minutes (every 1m)
+                /* GET notfound/404 rate limit */
+                new ExponentialRateLimiter(
+                        // by default, allow notfound/404 reads at a rate of 10 times every 10 minutes (every 1m), with a x2 multiplier up to a max of 24 hours
+                        config.getInt(Option.READ_NOTFOUND_RATE_LIMIT, 10),
                         config.getInt(Option.READ_NOTFOUND_RATE_LIMIT_PERIOD, 10),
-                        config.getInt(Option.READ_NOTFOUND_RATE_LIMIT, 10)
+                        config.getDouble(Option.READ_NOTFOUND_RATE_LIMIT_PERIOD_MULTIPLIER, 2.0),
+                        config.getInt(Option.READ_NOTFOUND_RATE_LIMIT_PERIOD_MAX, 1440) // 24 hours
                 ),
                 new TokenGenerator(config.getInt(Option.KEY_LENGTH, 7)),
                 maxContentLength,

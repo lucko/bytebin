@@ -94,6 +94,10 @@ public class Configuration {
         return get(option, def, Integer::parseInt, JsonElement::getAsInt);
     }
 
+    public double getDouble(Option option, double def) {
+        return get(option, def, Double::parseDouble, JsonElement::getAsDouble);
+    }
+
     public long getLong(Option option, long def) {
         return get(option, def, Long::parseLong, JsonElement::getAsLong);
     }
@@ -180,6 +184,8 @@ public class Configuration {
         READ_RATE_LIMIT_PERIOD("readRateLimitPeriodMins", "bytebin.ratelimit.read.period"), // minutes
         READ_RATE_LIMIT("readRateLimit", "bytebin.ratelimit.read.amount"),
         READ_NOTFOUND_RATE_LIMIT_PERIOD("readFailedRateLimitPeriodMins", "bytebin.ratelimit.read.notfound.period"), // minutes
+        READ_NOTFOUND_RATE_LIMIT_PERIOD_MULTIPLIER("readFailedRateLimitPeriodMultiplier", "bytebin.ratelimit.read.notfound.period.multiplier"), // minutes
+        READ_NOTFOUND_RATE_LIMIT_PERIOD_MAX("readFailedRateLimitPeriodMaxMins", "bytebin.ratelimit.read.notfound.period.max"), // minutes
         READ_NOTFOUND_RATE_LIMIT("readFailedRateLimit", "bytebin.ratelimit.read.notfound.amount");
 
         final String keyJson;

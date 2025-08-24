@@ -25,40 +25,15 @@
 
 package me.lucko.bytebin.util;
 
-import com.github.benmanes.caffeine.cache.Caffeine;
-import com.github.benmanes.caffeine.cache.LoadingCache;
-
-import java.util.concurrent.TimeUnit;
-import java.util.concurrent.atomic.AtomicInteger;
-
 /**
  * Handles a rate limit
  */
-public class RateLimiter {
-    /** Rate limiter cache - allow x "actions" every x minutes */
-    private final LoadingCache<String, AtomicInteger> rateLimiter;
-    /** The number of actions allowed in each period  */
-    private final int actionsPerCycle;
+public interface RateLimiter {
 
-    public RateLimiter(int periodMins, int actionsPerCycle) {
-        this.rateLimiter = Caffeine.newBuilder()
-                .expireAfterWrite(periodMins, TimeUnit.MINUTES)
-                .build(key -> new AtomicInteger(0));
-        this.actionsPerCycle = actionsPerCycle;
-    }
+    boolean check(String ipAddress);
 
-    public boolean check(String ipAddress) {
-        //noinspection ConstantConditions
-        return this.rateLimiter.get(ipAddress).get() > this.actionsPerCycle;
-    }
+    boolean checkAndIncrement(String ipAddress);
 
-    public boolean incrementAndCheck(String ipAddress) {
-        //noinspection ConstantConditions
-        return this.rateLimiter.get(ipAddress).incrementAndGet() > this.actionsPerCycle;
-    }
+    void increment(String ipAddress);
 
-    public void increment(String ipAddress) {
-        //noinspection ConstantConditions
-        this.rateLimiter.get(ipAddress).incrementAndGet();
-    }
 }
