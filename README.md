@@ -59,6 +59,12 @@ It's that easy!
   * In the response `Location` header.
   * In the response body, encoded as JSON - `{"key": "aabbcc"}`.
 
+
+## Recommended client libraries
+
+* **Python**: [pastes](https://pypi.org/project/pastes/) — minimalistic Python client for bytebin-compatible APIs
+
+
 ## Public Instances
 
 I host a public instance at [https://bytebin.lucko.me](https://bytebin.lucko.me)
