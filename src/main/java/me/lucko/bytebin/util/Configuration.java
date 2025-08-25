@@ -152,6 +152,7 @@ public class Configuration {
         HOST("host", "bytebin.http.host"),
         PORT("port", "bytebin.http.port"),
         HTTP_HOST_ALIASES("httpHostAliases", "bytebin.http.hostaliases"),
+        LOCAL_ASSET_PATH("localAssetPath", "bytebin.http.local.asset.path"),
 
         METRICS("metricsEnabled", "bytebin.metrics.enabled"),
         AUDIT_ON_STARTUP("startupAudit", "bytebin.startup.audit"),

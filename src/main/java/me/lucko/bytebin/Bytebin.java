@@ -165,6 +165,7 @@ public final class Bytebin implements AutoCloseable {
                 : new LogHandler.Stub();
 
         long maxContentLength = Content.MEGABYTE_LENGTH * config.getInt(Option.MAX_CONTENT_LENGTH, 10);
+        String localAssetPath = config.getString(Option.LOCAL_ASSET_PATH, null);
 
         // setup the web server
         ServerOptions serverOpts = new ServerOptions();
@@ -210,7 +211,8 @@ public final class Bytebin implements AutoCloseable {
                 maxContentLength,
                 expiryHandler,
                 config.getStringMap(Option.HTTP_HOST_ALIASES),
-                ImmutableSet.copyOf(config.getStringList(Option.ADMIN_API_KEYS))
+                ImmutableSet.copyOf(config.getStringList(Option.ADMIN_API_KEYS)),
+                localAssetPath != null ? Paths.get(localAssetPath) : null
         )));
 
         // schedule invalidation task

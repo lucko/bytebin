@@ -21,35 +21,49 @@ bytebin is:
 * **flexible** - supports *any* content type or encoding. (and CORS too!)
 * **easy to use** - simple HTTP API and a minimal HTML frontend.
 
-I host a [public instance](#public-instances) of bytebin for some of my own projects, which you are welcome to use too.
-
-There is also a traditional "pastebin" frontend for sharing code/configs/whatever, see [lucko/paste](https://github.com/lucko/paste) for more information.
-
-
 ## Running bytebin
 
 The easiest way to spin up a bytebin instance is using Docker. Images are automatically created and published to GitHub for each commit/release.
 
-Assuming you're in the bytebin directory, just run:
+Minimal Docker Compose example:
+
+```yaml
+services:
+  bytebin:
+    image: ghcr.io/lucko/bytebin
+    ports:
+      - 3000:8080
+    volumes:
+      - data:/opt/bytebin/content
+      - db:/opt/bytebin/db
+    environment:
+      # You can configure bytebin using
+      # environment variables.
+      BYTEBIN_MISC_KEYLENGTH: 15
+      BYTEBIN_CONTENT_MAXSIZE: 5
+
+volumes:
+  data: {}
+  db: {}
+```
+
 ```bash
 $ docker compose up
 ```
 
 You should then (hopefully!) be able to access the application at `http://localhost:3000/`.
 
-It's that easy!
-
-
-## API Usage
+## API
 
 ### Read
 
-* Just send a HTTP `GET` request to `/{key}` (e.g. `/aabbcc`).
+* Just send an HTTP `GET` request to `/{key}` (e.g. `/aabbcc`).
   * The content will be returned as-is in the response body.
   * If the content was posted using an encoding other than gzip, the requester must also "accept" it.
   * For gzip, bytebin will automatically uncompress if the client doesn't support compression.
 
-### Post
+### Write
+
 * Send a POST request to `/post` with the content in the request body.
   * You should also specify `Content-Type` and `User-Agent` headers, but this is not required.
 * Ideally, content should be compressed with GZIP or another mechanism before being uploaded.
@@ -59,36 +73,6 @@ It's that easy!
   * In the response `Location` header.
   * In the response body, encoded as JSON - `{"key": "aabbcc"}`.
 
-## Public Instances
-
-I host a public instance at [https://bytebin.lucko.me](https://bytebin.lucko.me)
-
-You can use it in your application as long as:
-
-* you're not malicious
-* you don't needlessly spam it
-* your usage isn't illegal, infringing copyright or otherwise going to get me into trouble
-* you provide a `User-Agent` header uniquely identifying your application
-
-If you're planning something likely to be super duper popular or use a lot of data (say >5GB per month across all users), then please [run it past me](https://lucko.me/) first - otherwise, go for it!
-
-If you come across any content which is illegal or infringes on copyright, please [get in touch](https://lucko.me/contact) and let me know so I can remove it.
-
-## Credits
-
-bytebin uses:
-
-* [jooby](https://jooby.io/) and [netty](https://netty.io/) for handling http requests
-* [caffeine](https://github.com/ben-manes/caffeine) for caching and rate limiting
-* [gson](https://github.com/google/gson) to read the configuration file on startup
-
-and plain ol' Java for everything else.
-
-## Performance
-
-I haven't had time to do any accurate benchmarks or performance testing, however, the libraries bytebin uses (see above) are known to be pretty efficient.
-
-The [public instance](#public-instances) handles approx ~250k requests per day and stores ~1M items at any one time. It uses very little CPU resources and memory only up to the desired cache size.
-
 ## License
+
 MIT, have fun!
