@@ -1,4 +1,3 @@
-
 /*
  * This file is part of bytebin, licensed under the MIT License.
  *

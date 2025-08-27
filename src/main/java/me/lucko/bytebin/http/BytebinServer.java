@@ -29,6 +29,7 @@ import io.jooby.Context;
 import io.jooby.Jooby;
 import io.jooby.MediaType;
 import io.jooby.ReactiveSupport;
+import io.jooby.Route;
 import io.jooby.RouterOptions;
 import io.jooby.StatusCode;
 import io.jooby.exception.StatusCodeException;
@@ -142,7 +143,7 @@ public class BytebinServer extends Jooby {
                     .setMethods("POST", "PUT")
                     .setHeaders("Content-Type", "Accept", "Origin", "Content-Encoding", "Allow-Modification", "Bytebin-Api-Key", "Bytebin-Forwarded-For")));
 
-            PostHandler postHandler = new PostHandler(this, logHandler, postRateLimiter, rateLimitHandler, storageHandler, contentLoader, contentTokenGenerator, maxContentLength, expiryHandler, hostAliases);
+            Route.Handler postHandler = new MetricsFilter("POST").then(new PostHandler(this, logHandler, postRateLimiter, rateLimitHandler, storageHandler, contentLoader, contentTokenGenerator, maxContentLength, expiryHandler, hostAliases));
             post("/post", postHandler);
             put("/post", postHandler);
         });
@@ -154,8 +155,8 @@ public class BytebinServer extends Jooby {
                     .setMethods("GET", "PUT")
                     .setHeaders("Content-Type", "Accept", "Origin", "Content-Encoding", "Authorization", "Bytebin-Api-Key", "Bytebin-Forwarded-For")));
 
-            get("/{id:[a-zA-Z0-9]+}", new GetHandler(this, logHandler, readRateLimiter, readNotFoundRateLimiter, rateLimitHandler, contentLoader));
-            put("/{id:[a-zA-Z0-9]+}", new UpdateHandler(this, logHandler, putRateLimiter, rateLimitHandler, storageHandler, contentLoader, maxContentLength, expiryHandler));
+            get("/{id:[a-zA-Z0-9]+}", new MetricsFilter("GET").then(new GetHandler(this, logHandler, readRateLimiter, readNotFoundRateLimiter, rateLimitHandler, contentLoader)));
+            put("/{id:[a-zA-Z0-9]+}", new MetricsFilter("PUT").then(new UpdateHandler(this, logHandler, putRateLimiter, rateLimitHandler, storageHandler, contentLoader, maxContentLength, expiryHandler)));
         });
 
         routes(() -> {

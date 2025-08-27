@@ -28,6 +28,7 @@ package me.lucko.bytebin.content;
 import com.github.benmanes.caffeine.cache.CacheLoader;
 import com.google.common.collect.ImmutableMap;
 import io.prometheus.client.Counter;
+import io.prometheus.client.Histogram;
 import me.lucko.bytebin.content.storage.StorageBackend;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
@@ -56,6 +57,75 @@ public class ContentStorageHandler implements CacheLoader<String, Content> {
             .name("bytebin_backend_write_total")
             .labelNames("backend")
             .help("Counts the number of times content was written to the backend")
+            .register();
+
+    private static final Counter DELETE_FROM_BACKEND_COUNTER = Counter.build()
+            .name("bytebin_backend_delete_total")
+            .labelNames("backend")
+            .help("Counts the number of times content was deleted from the backend")
+            .register();
+
+    private static final Histogram READ_FROM_BACKEND_HISTOGRAM = Histogram.build()
+            .name("bytebin_backend_read_duration_seconds")
+            .buckets(
+                    0.001, // 1 ms
+                    0.002, // 2 ms
+                    0.005, // 5 ms
+                    0.01,  // 10 ms
+                    0.025, // 25 ms
+                    0.05,  // 50 ms
+                    0.1,   // 100 ms
+                    0.25,  // 250 ms
+                    0.5,   // 500 ms
+                    1,     // 1 s
+                    2,     // 2 s
+                    5,     // 5 s
+                    10     // 10 s
+            )
+            .help("The duration to read from the backend")
+            .labelNames("backend")
+            .register();
+
+    private static final Histogram WRITE_TO_BACKEND_HISTOGRAM = Histogram.build()
+            .name("bytebin_backend_write_duration_seconds")
+            .buckets(
+                    0.001, // 1 ms
+                    0.002, // 2 ms
+                    0.005, // 5 ms
+                    0.01,  // 10 ms
+                    0.025, // 25 ms
+                    0.05,  // 50 ms
+                    0.1,   // 100 ms
+                    0.25,  // 250 ms
+                    0.5,   // 500 ms
+                    1,     // 1 s
+                    2,     // 2 s
+                    5,     // 5 s
+                    10     // 10 s
+            )
+            .help("The duration to write to the backend")
+            .labelNames("backend")
+            .register();
+
+    private static final Histogram DELETE_FROM_BACKEND_HISTOGRAM = Histogram.build()
+            .name("bytebin_backend_delete_duration_seconds")
+            .buckets(
+                    0.001, // 1 ms
+                    0.002, // 2 ms
+                    0.005, // 5 ms
+                    0.01,  // 10 ms
+                    0.025, // 25 ms
+                    0.05,  // 50 ms
+                    0.1,   // 100 ms
+                    0.25,  // 250 ms
+                    0.5,   // 500 ms
+                    1,     // 1 s
+                    2,     // 2 s
+                    5,     // 5 s
+                    10     // 10 s
+            )
+            .help("The duration to delete from the backend")
+            .labelNames("backend")
             .register();
 
     private static final Counter BACKEND_ERROR_COUNTER = Counter.build()
@@ -114,7 +184,7 @@ public class ContentStorageHandler implements CacheLoader<String, Content> {
         LOGGER.info("[STORAGE] Loading '" + key + "' from the '" + backendId + "' backend");
 
         // load the content from the backend
-        try {
+        try (Histogram.Timer ignored = READ_FROM_BACKEND_HISTOGRAM.labels(backendId).startTimer()) {
             Content content = backend.load(key);
             if (content != null) {
                 return content;
@@ -145,7 +215,7 @@ public class ContentStorageHandler implements CacheLoader<String, Content> {
         WRITE_TO_BACKEND_COUNTER.labels(backendId).inc();
 
         // save to the backend
-        try {
+        try (Histogram.Timer ignored = WRITE_TO_BACKEND_HISTOGRAM.labels(backendId).startTimer()) {
             backend.save(content);
         } catch (Exception e) {
             LOGGER.warn("[STORAGE] Unable to save '" + content.getKey() + "' to the '" + backendId + "' backend", e);
@@ -170,8 +240,10 @@ public class ContentStorageHandler implements CacheLoader<String, Content> {
             return;
         }
 
+        DELETE_FROM_BACKEND_COUNTER.labels(backendId).inc();
+
         // delete the data from the backend
-        try {
+        try (Histogram.Timer ignored = DELETE_FROM_BACKEND_HISTOGRAM.labels(backendId).startTimer()) {
             backend.delete(key);
         } catch (Exception e) {
             LOGGER.warn("[STORAGE] Unable to delete '" + key + "' from the '" + backend.getBackendId() + "' backend", e);

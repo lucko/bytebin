@@ -34,6 +34,7 @@ import com.j256.ormlite.support.ConnectionSource;
 import com.j256.ormlite.table.TableUtils;
 import io.prometheus.client.Counter;
 import io.prometheus.client.Gauge;
+import io.prometheus.client.Histogram;
 import me.lucko.bytebin.content.storage.StorageBackend;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
@@ -71,6 +72,27 @@ public class ContentIndexDatabase implements AutoCloseable {
             .name("bytebin_content_size")
             .help("The size of stored content")
             .labelNames("type", "backend")
+            .register();
+
+    private static final Histogram DB_TRANSACTION_DURATION = Histogram.build()
+            .name("bytebin_db_transaction_duration_seconds")
+            .buckets(
+                    0.001, // 1 ms
+                    0.002, // 2 ms
+                    0.005, // 5 ms
+                    0.01,  // 10 ms
+                    0.025, // 25 ms
+                    0.05,  // 50 ms
+                    0.1,   // 100 ms
+                    0.25,  // 250 ms
+                    0.5,   // 500 ms
+                    1,     // 1 s
+                    2,     // 2 s
+                    5,     // 5 s
+                    10     // 10 s
+            )
+            .help("The duration to query the db")
+            .labelNames("operation")
             .register();
 
     private static final Counter DB_ERROR_COUNTER = Counter.build()
@@ -113,7 +135,7 @@ public class ContentIndexDatabase implements AutoCloseable {
     }
 
     public void put(Content content) {
-        try {
+        try (Histogram.Timer ignored = DB_TRANSACTION_DURATION.labels("put").startTimer()) {
             this.dao.createOrUpdate(content);
         } catch (SQLException e) {
             LOGGER.error("[INDEX DB] Error performing sql operation", e);
@@ -122,7 +144,7 @@ public class ContentIndexDatabase implements AutoCloseable {
     }
 
     public Content get(String key) {
-        try {
+        try (Histogram.Timer ignored = DB_TRANSACTION_DURATION.labels("get").startTimer()) {
             return this.dao.queryForId(key);
         } catch (SQLException e) {
             LOGGER.error("[INDEX DB] Error performing sql operation", e);
@@ -132,7 +154,7 @@ public class ContentIndexDatabase implements AutoCloseable {
     }
 
     public void putAll(Collection<Content> content) {
-        try {
+        try (Histogram.Timer ignored = DB_TRANSACTION_DURATION.labels("putAll").startTimer()) {
             this.dao.create(content);
         } catch (Exception e) {
             LOGGER.error("[INDEX DB] Error performing sql operation", e);
@@ -141,7 +163,7 @@ public class ContentIndexDatabase implements AutoCloseable {
     }
 
     public void remove(String key) {
-        try {
+        try (Histogram.Timer ignored = DB_TRANSACTION_DURATION.labels("remove").startTimer()) {
             this.dao.deleteById(key);
         } catch (SQLException e) {
             LOGGER.error("[INDEX DB] Error performing sql operation", e);
@@ -150,7 +172,7 @@ public class ContentIndexDatabase implements AutoCloseable {
     }
 
     public Collection<Content> getExpired() {
-        try {
+        try (Histogram.Timer ignored = DB_TRANSACTION_DURATION.labels("getExpired").startTimer()) {
             return this.dao.queryBuilder().where()
                     .isNotNull("expiry")
                     .and()
@@ -166,7 +188,7 @@ public class ContentIndexDatabase implements AutoCloseable {
     record ContentStorageKeys(String contentType, String backend) { }
 
     private Map<ContentStorageKeys, Long> queryStringToIntMap(String returnExpr) {
-        try {
+        try (Histogram.Timer ignored = DB_TRANSACTION_DURATION.labels("queryStringToIntMap").startTimer()) {
             Map<ContentStorageKeys, Long> map = new HashMap<>();
             try (GenericRawResults<Object[]> results = this.dao.queryRaw(
                     "SELECT content_type, backend_id, " + returnExpr + " FROM content GROUP BY content_type, backend_id",
