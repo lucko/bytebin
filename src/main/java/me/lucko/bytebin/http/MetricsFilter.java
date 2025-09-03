@@ -46,7 +46,10 @@ public class MetricsFilter implements Route.Filter {
                     1,     // 1 s
                     2,     // 2 s
                     5,     // 5 s
-                    10     // 10 s
+                    10,    // 10 s
+                    15,    // 15 s
+                    20,    // 20 s
+                    30     // 30 s
             )
             .help("The duration to handle requests")
             .labelNames("method")

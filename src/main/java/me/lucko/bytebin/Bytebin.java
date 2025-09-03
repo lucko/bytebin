@@ -173,6 +173,7 @@ public final class Bytebin implements AutoCloseable {
         serverOpts.setPort(config.getInt(Option.PORT, 8080));
         serverOpts.setCompressionLevel(null);
         serverOpts.setMaxRequestSize((int) maxContentLength);
+        serverOpts.setIoThreads(config.getInt(Option.IO_THREADS, 32));
 
         this.server = new JettyServer(serverOpts);
         this.server.start(Jooby.createApp(this.server, ExecutionMode.EVENT_LOOP, () -> new BytebinServer(

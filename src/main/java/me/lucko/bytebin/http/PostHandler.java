@@ -28,6 +28,8 @@ package me.lucko.bytebin.http;
 import io.jooby.Context;
 import io.jooby.MediaType;
 import io.jooby.Route;
+import io.jooby.ServerOptions;
+import io.jooby.SneakyThrows;
 import io.jooby.StatusCode;
 import io.jooby.exception.StatusCodeException;
 import io.prometheus.client.Summary;
@@ -45,6 +47,10 @@ import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
 import javax.annotation.Nonnull;
+import java.io.ByteArrayOutputStream;
+import java.io.IOException;
+import java.io.InputStream;
+import java.nio.ByteBuffer;
 import java.util.Date;
 import java.util.List;
 import java.util.Map;
@@ -90,10 +96,10 @@ public final class PostHandler implements Route.Handler {
 
     @Override
     public String apply(@Nonnull Context ctx) {
-        byte[] content = ctx.body().bytes();
+        byte[] content = getBodyAsByteArray(ctx, (int) this.maxContentLength);
 
         // ensure something was actually posted
-        if (content == null || content.length == 0) {
+        if (content.length == 0) {
             BytebinServer.recordRejectedRequest("POST", "missing_content", ctx);
             throw new StatusCodeException(StatusCode.BAD_REQUEST, "Missing content");
         }
@@ -208,6 +214,27 @@ public final class PostHandler implements Route.Handler {
             ctx.setResponseHeader("Location", key);
             ctx.setResponseType(MediaType.JSON);
             return "{\"key\":\"" + key + "\"}";
+        }
+    }
+
+    static byte[] getBodyAsByteArray(Context ctx, int maxSize) {
+        int declaredSize = ctx.header("Content-Length").intValue(16384);
+
+        if (declaredSize > maxSize) {
+            BytebinServer.recordRejectedRequest("POST", "content_too_large", ctx);
+            throw new StatusCodeException(StatusCode.REQUEST_ENTITY_TOO_LARGE, "Content too large");
+        }
+
+        try (InputStream stream = ctx.body().stream()) {
+            ByteArrayOutputStream out = new ByteArrayOutputStream(declaredSize);
+            int len;
+            byte[] buffer = new byte[16384];
+            while ((len = stream.read(buffer)) != -1) {
+                out.write(buffer, 0, len);
+            }
+            return out.toByteArray();
+        } catch (IOException x) {
+            throw SneakyThrows.propagate(x);
         }
     }
 

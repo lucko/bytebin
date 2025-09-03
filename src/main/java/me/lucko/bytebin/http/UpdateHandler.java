@@ -82,7 +82,7 @@ public final class UpdateHandler implements Route.Handler {
             throw new StatusCodeException(StatusCode.NOT_FOUND, "Invalid path");
         }
 
-        byte[] newContent = ctx.body().bytes();
+        byte[] newContent = PostHandler.getBodyAsByteArray(ctx, (int) this.maxContentLength);
 
         // ensure something was actually posted
         if (newContent.length == 0) {
