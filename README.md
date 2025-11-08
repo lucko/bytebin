@@ -1,7 +1,7 @@
 <h1 align="center">
 	<img
 		alt="bytebin"
-		src="https://i.imgur.com/XBxNheI.png">
+		src="./assets/banner.png">
 </h1>
 
 <h3 align="center">
