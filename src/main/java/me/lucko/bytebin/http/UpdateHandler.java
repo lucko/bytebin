@@ -32,11 +32,12 @@ import io.jooby.exception.StatusCodeException;
 import me.lucko.bytebin.content.ContentLoader;
 import me.lucko.bytebin.content.ContentStorageHandler;
 import me.lucko.bytebin.logging.LogHandler;
+import me.lucko.bytebin.ratelimit.RateLimitHandler;
+import me.lucko.bytebin.ratelimit.RateLimiter;
 import me.lucko.bytebin.util.ContentEncoding;
 import me.lucko.bytebin.util.ExpiryHandler;
 import me.lucko.bytebin.util.Gzip;
-import me.lucko.bytebin.util.RateLimitHandler;
-import me.lucko.bytebin.util.RateLimiter;
+import me.lucko.bytebin.util.Metrics;
 import me.lucko.bytebin.util.TokenGenerator;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
@@ -78,7 +79,7 @@ public final class UpdateHandler implements Route.Handler {
         // get the requested path
         String path = ctx.path("id").value();
         if (path.trim().isEmpty() || TokenGenerator.INVALID_TOKEN_PATTERN.matcher(path).find()) {
-            BytebinServer.recordRejectedRequest("PUT", "invalid_path", ctx);
+            Metrics.recordRejectedRequest("PUT", "invalid_path", ctx);
             throw new StatusCodeException(StatusCode.NOT_FOUND, "Invalid path");
         }
 
@@ -86,7 +87,7 @@ public final class UpdateHandler implements Route.Handler {
 
         // ensure something was actually posted
         if (newContent.length == 0) {
-            BytebinServer.recordRejectedRequest("PUT", "missing_content", ctx);
+            Metrics.recordRejectedRequest("PUT", "missing_content", ctx);
             throw new StatusCodeException(StatusCode.BAD_REQUEST, "Missing content");
         }
 
@@ -112,7 +113,7 @@ public final class UpdateHandler implements Route.Handler {
 
         return this.contentLoader.get(path).handleAsync((oldContent, throwable) -> {
             if (throwable != null || oldContent == null || oldContent.getKey() == null || oldContent.getContent().length == 0) {
-                BytebinServer.recordRejectedRequest("PUT", "not_found", ctx);
+                Metrics.recordRejectedRequest("PUT", "not_found", ctx);
                 // use a generic response to prevent use of this endpoint to search for valid content
                 throw new StatusCodeException(StatusCode.FORBIDDEN, "Incorrect modification key");
             }
@@ -139,7 +140,7 @@ public final class UpdateHandler implements Route.Handler {
 
             // check max content length
             if (buf.length > this.maxContentLength) {
-                BytebinServer.recordRejectedRequest("PUT", "content_too_large", ctx);
+                Metrics.recordRejectedRequest("PUT", "content_too_large", ctx);
                 throw new StatusCodeException(StatusCode.REQUEST_ENTITY_TOO_LARGE, "Content too large");
             }
 
@@ -159,7 +160,7 @@ public final class UpdateHandler implements Route.Handler {
 
             // metrics
             if (rateLimitResult.isRealUser()) {
-                BytebinServer.recordRequest("PUT", ctx);
+                Metrics.recordRequest("PUT", ctx);
                 this.logHandler.logPost(
                         path,
                         new LogHandler.User(userAgent, origin, host, ipAddress, headers),

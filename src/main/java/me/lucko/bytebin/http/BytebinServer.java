@@ -25,7 +25,6 @@
 
 package me.lucko.bytebin.http;
 
-import io.jooby.Context;
 import io.jooby.Jooby;
 import io.jooby.MediaType;
 import io.jooby.ReactiveSupport;
@@ -37,16 +36,15 @@ import io.jooby.handler.AssetHandler;
 import io.jooby.handler.AssetSource;
 import io.jooby.handler.Cors;
 import io.jooby.handler.CorsHandler;
-import io.prometheus.client.Counter;
 import me.lucko.bytebin.Bytebin;
 import me.lucko.bytebin.content.ContentLoader;
 import me.lucko.bytebin.content.ContentStorageHandler;
 import me.lucko.bytebin.http.admin.BulkDeleteHandler;
 import me.lucko.bytebin.logging.LogHandler;
-import me.lucko.bytebin.util.ExceptionHandler;
+import me.lucko.bytebin.ratelimit.RateLimitHandler;
+import me.lucko.bytebin.ratelimit.RateLimiter;
 import me.lucko.bytebin.util.ExpiryHandler;
-import me.lucko.bytebin.util.RateLimitHandler;
-import me.lucko.bytebin.util.RateLimiter;
+import me.lucko.bytebin.util.Metrics;
 import me.lucko.bytebin.util.TokenGenerator;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
@@ -61,18 +59,6 @@ public class BytebinServer extends Jooby {
 
     /** Logger instance */
     private static final Logger LOGGER = LogManager.getLogger(BytebinServer.class);
-
-    private static final Counter REQUESTS_COUNTER = Counter.build()
-            .name("bytebin_requests_total")
-            .help("The amount of requests handled")
-            .labelNames("method", "useragent")
-            .register();
-
-    private static final Counter REJECTED_REQUESTS_COUNTER = Counter.build()
-            .name("bytebin_rejected_requests_total")
-            .help("The amount of rejected requests")
-            .labelNames("method", "reason", "useragent")
-            .register();
 
     public BytebinServer(
             ContentStorageHandler storageHandler,
@@ -110,7 +96,7 @@ public class BytebinServer extends Jooby {
             } else {
                 // handle unexpected errors: log stack trace and send a generic response
                 LOGGER.error("Error thrown by handler", cause);
-                ExceptionHandler.UNCAUGHT_ERROR_COUNTER.labels(cause.getClass().getSimpleName()).inc();
+                Metrics.UNCAUGHT_ERROR_COUNTER.labels(cause.getClass().getSimpleName()).inc();
                 ctx.setResponseCode(StatusCode.NOT_FOUND)
                         .setResponseType(MediaType.TEXT)
                         .send("Invalid path");
@@ -162,36 +148,6 @@ public class BytebinServer extends Jooby {
         routes(() -> {
             post("/admin/bulkdelete", new BulkDeleteHandler(this, storageHandler, contentLoader, adminApiKeys));
         });
-    }
-
-    public static String getMetricsLabel(Context ctx) {
-        String origin = ctx.header("Origin").valueOrNull();
-        if (origin != null) {
-            return origin;
-        }
-
-        String userAgent = ctx.header("User-Agent").valueOrNull();
-        if (userAgent != null) {
-            return userAgent;
-        }
-
-        return "unknown";
-    }
-
-    public static void recordRequest(String method, Context ctx) {
-        recordRequest(method, getMetricsLabel(ctx));
-    }
-
-    public static void recordRequest(String method, String metricsLabel) {
-        REQUESTS_COUNTER.labels(method, metricsLabel).inc();
-    }
-
-    public static void recordRejectedRequest(String method, String reason, Context ctx) {
-        recordRejectedRequest(method, reason, getMetricsLabel(ctx));
-    }
-
-    public static void recordRejectedRequest(String method, String reason, String metricsLabel) {
-        REJECTED_REQUESTS_COUNTER.labels(method, reason, metricsLabel).inc();
     }
 
 }

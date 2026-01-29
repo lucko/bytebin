@@ -23,13 +23,13 @@
  *  SOFTWARE.
  */
 
-package me.lucko.bytebin.util;
+package me.lucko.bytebin.ratelimit;
 
 import com.google.common.collect.ImmutableSet;
 import io.jooby.Context;
 import io.jooby.StatusCode;
 import io.jooby.exception.StatusCodeException;
-import me.lucko.bytebin.http.BytebinServer;
+import me.lucko.bytebin.util.Metrics;
 
 import java.util.Collection;
 import java.util.Set;
@@ -88,7 +88,7 @@ public final class RateLimitHandler {
 
         // check rate limits
         if (limiter.checkAndIncrement(ipAddress)) {
-            BytebinServer.recordRejectedRequest(method, "rate_limited", ctx);
+            Metrics.recordRejectedRequest(method, "rate_limited", ctx);
             throw new StatusCodeException(StatusCode.TOO_MANY_REQUESTS, "Rate limit exceeded");
         }
 

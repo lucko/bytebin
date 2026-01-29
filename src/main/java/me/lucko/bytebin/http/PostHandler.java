@@ -28,20 +28,19 @@ package me.lucko.bytebin.http;
 import io.jooby.Context;
 import io.jooby.MediaType;
 import io.jooby.Route;
-import io.jooby.ServerOptions;
 import io.jooby.SneakyThrows;
 import io.jooby.StatusCode;
 import io.jooby.exception.StatusCodeException;
-import io.prometheus.client.Summary;
 import me.lucko.bytebin.content.Content;
 import me.lucko.bytebin.content.ContentLoader;
 import me.lucko.bytebin.content.ContentStorageHandler;
 import me.lucko.bytebin.logging.LogHandler;
+import me.lucko.bytebin.ratelimit.RateLimitHandler;
+import me.lucko.bytebin.ratelimit.RateLimiter;
 import me.lucko.bytebin.util.ContentEncoding;
 import me.lucko.bytebin.util.ExpiryHandler;
 import me.lucko.bytebin.util.Gzip;
-import me.lucko.bytebin.util.RateLimitHandler;
-import me.lucko.bytebin.util.RateLimiter;
+import me.lucko.bytebin.util.Metrics;
 import me.lucko.bytebin.util.TokenGenerator;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
@@ -50,7 +49,6 @@ import javax.annotation.Nonnull;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
-import java.nio.ByteBuffer;
 import java.util.Date;
 import java.util.List;
 import java.util.Map;
@@ -60,12 +58,6 @@ public final class PostHandler implements Route.Handler {
 
     /** Logger instance */
     private static final Logger LOGGER = LogManager.getLogger(PostHandler.class);
-
-    public static final Summary CONTENT_SIZE_SUMMARY = Summary.build()
-            .name("bytebin_content_size_bytes")
-            .help("The size of posted content")
-            .labelNames("useragent")
-            .register();
 
     private final BytebinServer server;
     private final LogHandler logHandler;
@@ -100,7 +92,7 @@ public final class PostHandler implements Route.Handler {
 
         // ensure something was actually posted
         if (content.length == 0) {
-            BytebinServer.recordRejectedRequest("POST", "missing_content", ctx);
+            Metrics.recordRejectedRequest("POST", "missing_content", ctx);
             throw new StatusCodeException(StatusCode.BAD_REQUEST, "Missing content");
         }
 
@@ -128,7 +120,7 @@ public final class PostHandler implements Route.Handler {
 
         // check max content length
         if (content.length > this.maxContentLength) {
-            BytebinServer.recordRejectedRequest("POST", "content_too_large", ctx);
+            Metrics.recordRejectedRequest("POST", "content_too_large", ctx);
             throw new StatusCodeException(StatusCode.REQUEST_ENTITY_TOO_LARGE, "Content too large");
         }
 
@@ -154,9 +146,9 @@ public final class PostHandler implements Route.Handler {
 
         // metrics
         if (rateLimitResult.isRealUser()) {
-            String metricsLabel = BytebinServer.getMetricsLabel(ctx);
-            BytebinServer.recordRequest("POST", metricsLabel);
-            CONTENT_SIZE_SUMMARY.labels(metricsLabel).observe(content.length);
+            String metricsLabel = Metrics.getMetricsLabel(ctx);
+            Metrics.recordRequest("POST", metricsLabel);
+            Metrics.HTTP_POST_CONTENT_SIZE_HISTOGRAM.labels(metricsLabel).observe(content.length);
 
             this.logHandler.logPost(
                     key,
@@ -221,7 +213,7 @@ public final class PostHandler implements Route.Handler {
         int declaredSize = ctx.header("Content-Length").intValue(16384);
 
         if (declaredSize > maxSize) {
-            BytebinServer.recordRejectedRequest("POST", "content_too_large", ctx);
+            Metrics.recordRejectedRequest("POST", "content_too_large", ctx);
             throw new StatusCodeException(StatusCode.REQUEST_ENTITY_TOO_LARGE, "Content too large");
         }
 

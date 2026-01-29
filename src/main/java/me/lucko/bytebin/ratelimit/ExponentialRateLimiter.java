@@ -23,7 +23,7 @@
  *  SOFTWARE.
  */
 
-package me.lucko.bytebin.util;
+package me.lucko.bytebin.ratelimit;
 
 import com.github.benmanes.caffeine.cache.Caffeine;
 import com.github.benmanes.caffeine.cache.LoadingCache;

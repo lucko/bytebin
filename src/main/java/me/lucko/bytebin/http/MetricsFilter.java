@@ -28,45 +28,15 @@ package me.lucko.bytebin.http;
 import io.jooby.Route;
 import io.prometheus.client.Gauge;
 import io.prometheus.client.Histogram;
+import me.lucko.bytebin.util.Metrics;
 
 public class MetricsFilter implements Route.Filter {
-
-    private static final Histogram REQUEST_DURATION = Histogram.build()
-            .name("bytebin_request_duration_seconds")
-            .buckets(
-                    0.001, // 1 ms
-                    0.002, // 2 ms
-                    0.005, // 5 ms
-                    0.01,  // 10 ms
-                    0.025, // 25 ms
-                    0.05,  // 50 ms
-                    0.1,   // 100 ms
-                    0.25,  // 250 ms
-                    0.5,   // 500 ms
-                    1,     // 1 s
-                    2,     // 2 s
-                    5,     // 5 s
-                    10,    // 10 s
-                    15,    // 15 s
-                    20,    // 20 s
-                    30     // 30 s
-            )
-            .help("The duration to handle requests")
-            .labelNames("method")
-            .register();
-
-    private static final Gauge REQUESTS_ACTIVE = Gauge.build()
-            .name("bytebin_requests_active")
-            .help("The amount of active in-flight requests")
-            .labelNames("method")
-            .register();
-
     private final Histogram.Child durationHistogram;
     private final Gauge.Child activeGauge;
 
     public MetricsFilter(String method) {
-        this.durationHistogram = REQUEST_DURATION.labels(method);
-        this.activeGauge = REQUESTS_ACTIVE.labels(method);
+        this.durationHistogram = Metrics.HTTP_REQUEST_DURATION_HISTOGRAM.labels(method);
+        this.activeGauge = Metrics.HTTP_REQUESTS_ACTIVE_GAUGE.labels(method);
     }
 
     @Override

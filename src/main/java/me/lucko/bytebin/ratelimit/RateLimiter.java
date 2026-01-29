@@ -23,7 +23,7 @@
  *  SOFTWARE.
  */
 
-package me.lucko.bytebin.util;
+package me.lucko.bytebin.ratelimit;
 
 /**
  * Handles a rate limit

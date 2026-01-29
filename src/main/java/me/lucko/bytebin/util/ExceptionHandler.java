@@ -25,7 +25,6 @@
 
 package me.lucko.bytebin.util;
 
-import io.prometheus.client.Counter;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
@@ -35,15 +34,9 @@ public class ExceptionHandler implements Thread.UncaughtExceptionHandler {
     /** Logger instance */
     private static final Logger LOGGER = LogManager.getLogger(ExceptionHandler.class);
 
-    public static final Counter UNCAUGHT_ERROR_COUNTER = Counter.build()
-            .name("bytebin_uncaught_error_total")
-            .labelNames("type")
-            .help("Counts the number of uncaught errors that have occurred")
-            .register();
-
     @Override
     public void uncaughtException(Thread t, Throwable e) {
         LOGGER.error("Uncaught exception thrown by thread " + t.getName(), e);
-        ExceptionHandler.UNCAUGHT_ERROR_COUNTER.labels(e.getClass().getSimpleName()).inc();
+        Metrics.UNCAUGHT_ERROR_COUNTER.labels(e.getClass().getSimpleName()).inc();
     }
 }

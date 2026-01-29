@@ -32,10 +32,11 @@ import io.jooby.StatusCode;
 import io.jooby.exception.StatusCodeException;
 import me.lucko.bytebin.content.ContentLoader;
 import me.lucko.bytebin.logging.LogHandler;
+import me.lucko.bytebin.ratelimit.RateLimitHandler;
+import me.lucko.bytebin.ratelimit.RateLimiter;
 import me.lucko.bytebin.util.ContentEncoding;
 import me.lucko.bytebin.util.Gzip;
-import me.lucko.bytebin.util.RateLimitHandler;
-import me.lucko.bytebin.util.RateLimiter;
+import me.lucko.bytebin.util.Metrics;
 import me.lucko.bytebin.util.TokenGenerator;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
@@ -74,7 +75,7 @@ public final class GetHandler implements Route.Handler {
         // get the requested path
         String path = ctx.path("id").value();
         if (path.trim().isEmpty() || TokenGenerator.INVALID_TOKEN_PATTERN.matcher(path).find()) {
-            BytebinServer.recordRejectedRequest("GET", "invalid_path", ctx);
+            Metrics.recordRejectedRequest("GET", "invalid_path", ctx);
             throw new StatusCodeException(StatusCode.NOT_FOUND, "Invalid path");
         }
 
@@ -104,7 +105,7 @@ public final class GetHandler implements Route.Handler {
             this.logHandler.logAttemptedGet(path, new LogHandler.User(userAgent, origin, host, ipAddress, headers));
 
             if (this.notFoundRateLimiter.check(rateLimitResult.ipAddress())) {
-                BytebinServer.recordRejectedRequest("GET", "rate_limited_get_not_found", ctx);
+                Metrics.recordRejectedRequest("GET", "rate_limited_get_not_found", ctx);
                 throw new StatusCodeException(StatusCode.TOO_MANY_REQUESTS, "Rate limit exceeded");
             }
         }
@@ -115,12 +116,12 @@ public final class GetHandler implements Route.Handler {
                 if (rateLimitResult.isRealUser()) {
                     this.notFoundRateLimiter.increment(rateLimitResult.ipAddress());
                 }
-                BytebinServer.recordRejectedRequest("GET", "not_found", ctx);
+                Metrics.recordRejectedRequest("GET", "not_found", ctx);
                 throw new StatusCodeException(StatusCode.NOT_FOUND, "Invalid path");
             }
 
             if (rateLimitResult.isRealUser()) {
-                BytebinServer.recordRequest("GET", ctx);
+                Metrics.recordRequest("GET", ctx);
                 this.logHandler.logGet(
                         path,
                         new LogHandler.User(userAgent, origin, host, ipAddress, headers),

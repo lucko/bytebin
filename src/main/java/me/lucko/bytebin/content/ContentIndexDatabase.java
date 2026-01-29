@@ -32,10 +32,9 @@ import com.j256.ormlite.field.DataType;
 import com.j256.ormlite.jdbc.JdbcConnectionSource;
 import com.j256.ormlite.support.ConnectionSource;
 import com.j256.ormlite.table.TableUtils;
-import io.prometheus.client.Counter;
-import io.prometheus.client.Gauge;
 import io.prometheus.client.Histogram;
 import me.lucko.bytebin.content.storage.StorageBackend;
+import me.lucko.bytebin.util.Metrics;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
@@ -62,45 +61,6 @@ public class ContentIndexDatabase implements AutoCloseable {
 
     private static final Logger LOGGER = LogManager.getLogger(ContentIndexDatabase.class);
 
-    private static final Gauge STORED_CONTENT_AMOUNT_GAUGE = Gauge.build()
-            .name("bytebin_content")
-            .help("The amount of stored content")
-            .labelNames("type", "backend")
-            .register();
-
-    private static final Gauge STORED_CONTENT_SIZE_GAUGE = Gauge.build()
-            .name("bytebin_content_size")
-            .help("The size of stored content")
-            .labelNames("type", "backend")
-            .register();
-
-    private static final Histogram DB_TRANSACTION_DURATION = Histogram.build()
-            .name("bytebin_db_transaction_duration_seconds")
-            .buckets(
-                    0.001, // 1 ms
-                    0.002, // 2 ms
-                    0.005, // 5 ms
-                    0.01,  // 10 ms
-                    0.025, // 25 ms
-                    0.05,  // 50 ms
-                    0.1,   // 100 ms
-                    0.25,  // 250 ms
-                    0.5,   // 500 ms
-                    1,     // 1 s
-                    2,     // 2 s
-                    5,     // 5 s
-                    10     // 10 s
-            )
-            .help("The duration to query the db")
-            .labelNames("operation")
-            .register();
-
-    private static final Counter DB_ERROR_COUNTER = Counter.build()
-            .name("bytebin_db_error_total")
-            .labelNames("operation")
-            .help("Counts the number of errors that have occurred when interacting with the index database")
-            .register();
-
     public static ContentIndexDatabase initialise(Collection<StorageBackend> backends) throws SQLException {
         // ensure the db directory exists, sqlite won't create it
         try {
@@ -125,6 +85,13 @@ public class ContentIndexDatabase implements AutoCloseable {
         return database;
     }
 
+    private static final Histogram.Child DURATION_HISTOGRAM_PUT = Metrics.DB_TRANSACTION_DURATION_HISTOGRAM.labels("put");
+    private static final Histogram.Child DURATION_HISTOGRAM_GET = Metrics.DB_TRANSACTION_DURATION_HISTOGRAM.labels("get");
+    private static final Histogram.Child DURATION_HISTOGRAM_PUT_ALL = Metrics.DB_TRANSACTION_DURATION_HISTOGRAM.labels("putAll");
+    private static final Histogram.Child DURATION_HISTOGRAM_REMOVE = Metrics.DB_TRANSACTION_DURATION_HISTOGRAM.labels("remove");
+    private static final Histogram.Child DURATION_HISTOGRAM_GET_EXPIRED = Metrics.DB_TRANSACTION_DURATION_HISTOGRAM.labels("getExpired");
+    private static final Histogram.Child DURATION_HISTOGRAM_QUERY_STRING_TO_INT_MAP = Metrics.DB_TRANSACTION_DURATION_HISTOGRAM.labels("queryStringToIntMap");
+
     private final ConnectionSource connectionSource;
     private final Dao<Content, String> dao;
 
@@ -135,44 +102,44 @@ public class ContentIndexDatabase implements AutoCloseable {
     }
 
     public void put(Content content) {
-        try (Histogram.Timer ignored = DB_TRANSACTION_DURATION.labels("put").startTimer()) {
+        try (Histogram.Timer ignored = DURATION_HISTOGRAM_PUT.startTimer()) {
             this.dao.createOrUpdate(content);
         } catch (SQLException e) {
             LOGGER.error("[INDEX DB] Error performing sql operation", e);
-            DB_ERROR_COUNTER.labels("put").inc();
+            Metrics.DB_ERROR_COUNTER.labels("put").inc();
         }
     }
 
     public Content get(String key) {
-        try (Histogram.Timer ignored = DB_TRANSACTION_DURATION.labels("get").startTimer()) {
+        try (Histogram.Timer ignored = DURATION_HISTOGRAM_GET.startTimer()) {
             return this.dao.queryForId(key);
         } catch (SQLException e) {
             LOGGER.error("[INDEX DB] Error performing sql operation", e);
-            DB_ERROR_COUNTER.labels("get").inc();
+            Metrics.DB_ERROR_COUNTER.labels("get").inc();
             return null;
         }
     }
 
     public void putAll(Collection<Content> content) {
-        try (Histogram.Timer ignored = DB_TRANSACTION_DURATION.labels("putAll").startTimer()) {
+        try (Histogram.Timer ignored = DURATION_HISTOGRAM_PUT_ALL.startTimer()) {
             this.dao.create(content);
         } catch (Exception e) {
             LOGGER.error("[INDEX DB] Error performing sql operation", e);
-            DB_ERROR_COUNTER.labels("putAll").inc();
+            Metrics.DB_ERROR_COUNTER.labels("putAll").inc();
         }
     }
 
     public void remove(String key) {
-        try (Histogram.Timer ignored = DB_TRANSACTION_DURATION.labels("remove").startTimer()) {
+        try (Histogram.Timer ignored = DURATION_HISTOGRAM_REMOVE.startTimer()) {
             this.dao.deleteById(key);
         } catch (SQLException e) {
             LOGGER.error("[INDEX DB] Error performing sql operation", e);
-            DB_ERROR_COUNTER.labels("remove").inc();
+            Metrics.DB_ERROR_COUNTER.labels("remove").inc();
         }
     }
 
     public Collection<Content> getExpired() {
-        try (Histogram.Timer ignored = DB_TRANSACTION_DURATION.labels("getExpired").startTimer()) {
+        try (Histogram.Timer ignored = DURATION_HISTOGRAM_GET_EXPIRED.startTimer()) {
             return this.dao.queryBuilder().where()
                     .isNotNull("expiry")
                     .and()
@@ -180,7 +147,7 @@ public class ContentIndexDatabase implements AutoCloseable {
                     .query();
         } catch (SQLException e) {
             LOGGER.error("[INDEX DB] Error performing sql operation", e);
-            DB_ERROR_COUNTER.labels("getExpired").inc();
+            Metrics.DB_ERROR_COUNTER.labels("getExpired").inc();
             return Collections.emptyList();
         }
     }
@@ -188,7 +155,7 @@ public class ContentIndexDatabase implements AutoCloseable {
     record ContentStorageKeys(String contentType, String backend) { }
 
     private Map<ContentStorageKeys, Long> queryStringToIntMap(String returnExpr) {
-        try (Histogram.Timer ignored = DB_TRANSACTION_DURATION.labels("queryStringToIntMap").startTimer()) {
+        try (Histogram.Timer ignored = DURATION_HISTOGRAM_QUERY_STRING_TO_INT_MAP.startTimer()) {
             Map<ContentStorageKeys, Long> map = new HashMap<>();
             try (GenericRawResults<Object[]> results = this.dao.queryRaw(
                     "SELECT content_type, backend_id, " + returnExpr + " FROM content GROUP BY content_type, backend_id",
@@ -204,17 +171,17 @@ public class ContentIndexDatabase implements AutoCloseable {
             return map;
         } catch (Exception e) {
             LOGGER.error("[INDEX DB] Error performing sql operation", e);
-            DB_ERROR_COUNTER.labels("queryStringToIntMap").inc();
+            Metrics.DB_ERROR_COUNTER.labels("queryStringToIntMap").inc();
             return Collections.emptyMap();
         }
     }
 
     public void recordMetrics() {
         Map<ContentStorageKeys, Long> contentTypeToCount = queryStringToIntMap("count(*)");
-        contentTypeToCount.forEach((keys, count) -> STORED_CONTENT_AMOUNT_GAUGE.labels(keys.contentType(), keys.backend()).set(count));
+        contentTypeToCount.forEach((keys, count) -> Metrics.STORED_CONTENT_COUNT_GAUGE.labels(keys.contentType(), keys.backend()).set(count));
 
         Map<ContentStorageKeys, Long> contentTypeToSize = queryStringToIntMap("sum(content_length)");
-        contentTypeToSize.forEach((keys, size) -> STORED_CONTENT_SIZE_GAUGE.labels(keys.contentType(), keys.backend()).set(size));
+        contentTypeToSize.forEach((keys, size) -> Metrics.STORED_CONTENT_SIZE_GAUGE.labels(keys.contentType(), keys.backend()).set(size));
     }
 
     @Override
