@@ -34,7 +34,7 @@
             <plugin>
                 <groupId>io.jooby</groupId>
                 <artifactId>jooby-maven-plugin</artifactId>
-                <version>4.0.13</version>
+                <version>4.0.11</version>
             </plugin>
             <plugin>
                 <artifactId>maven-shade-plugin</artifactId>
@@ -71,7 +71,7 @@
             <dependency>
                 <groupId>io.jooby</groupId>
                 <artifactId>jooby-bom</artifactId>
-                <version>4.0.13</version>
+                <version>4.0.11</version>
                 <type>pom</type>
                 <scope>import</scope>
             </dependency>
