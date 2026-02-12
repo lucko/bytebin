@@ -175,6 +175,7 @@ public final class Bytebin implements AutoCloseable {
         serverOpts.setCompressionLevel(null);
         serverOpts.setMaxRequestSize((int) maxContentLength);
         serverOpts.setIoThreads(config.getInt(Option.IO_THREADS, 32));
+        serverOpts.setWorkerThreads(config.getInt(Option.EXECUTOR_POOL_SIZE, 32));
 
         ExecutionMode executionMode = ExecutionMode.valueOf(
                 config.getString(Option.EXECUTION_MODE, "EVENT_LOOP").toUpperCase(Locale.ROOT)
