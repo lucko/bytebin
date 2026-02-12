@@ -163,6 +163,7 @@ public class Configuration {
         KEY_LENGTH("keyLength", "bytebin.misc.keylength"),
         EXECUTOR_POOL_SIZE("corePoolSize", "bytebin.misc.corepoolsize"),
         IO_THREADS("ioThreads", "bytebin.misc.iothreads"),
+        EXECUTION_MODE("executionMode", "bytebin.misc.executionmode"),
 
         S3("s3", "bytebin.storage.s3"),
         S3_BUCKET("s3Bucket", "bytebin.storage.s3.bucket"),

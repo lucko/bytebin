@@ -62,6 +62,7 @@ import org.apache.logging.log4j.io.IoBuilder;
 import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Locale;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
@@ -175,8 +176,12 @@ public final class Bytebin implements AutoCloseable {
         serverOpts.setMaxRequestSize((int) maxContentLength);
         serverOpts.setIoThreads(config.getInt(Option.IO_THREADS, 32));
 
+        ExecutionMode executionMode = ExecutionMode.valueOf(
+                config.getString(Option.EXECUTION_MODE, "EVENT_LOOP").toUpperCase(Locale.ROOT)
+        );
+
         this.server = new JettyServer(serverOpts);
-        this.server.start(Jooby.createApp(this.server, ExecutionMode.EVENT_LOOP, () -> new BytebinServer(
+        this.server.start(Jooby.createApp(this.server, executionMode, () -> new BytebinServer(
                 storageHandler,
                 contentLoader,
                 this.logHandler,
