@@ -112,7 +112,7 @@ public final class Bytebin implements AutoCloseable {
         // setup executor
         Thread.setDefaultUncaughtExceptionHandler(ExceptionHandler.INSTANCE);
         this.executor = Executors.newScheduledThreadPool(
-                config.getInt(Option.EXECUTOR_POOL_SIZE, 16),
+                config.getInt(Option.EXECUTOR_POOL_SIZE, 64),
                 new ThreadFactoryBuilder().setNameFormat("bytebin-io-%d").build()
         );
 
@@ -174,11 +174,11 @@ public final class Bytebin implements AutoCloseable {
         serverOpts.setPort(config.getInt(Option.PORT, 8080));
         serverOpts.setCompressionLevel(null);
         serverOpts.setMaxRequestSize((int) maxContentLength);
-        serverOpts.setIoThreads(config.getInt(Option.IO_THREADS, 32));
-        serverOpts.setWorkerThreads(config.getInt(Option.EXECUTOR_POOL_SIZE, 32));
+        serverOpts.setIoThreads(config.getInt(Option.IO_THREADS, 16));
+        serverOpts.setWorkerThreads(config.getInt(Option.EXECUTOR_POOL_SIZE, 64));
 
         ExecutionMode executionMode = ExecutionMode.valueOf(
-                config.getString(Option.EXECUTION_MODE, "EVENT_LOOP").toUpperCase(Locale.ROOT)
+                config.getString(Option.EXECUTION_MODE, "WORKER").toUpperCase(Locale.ROOT)
         );
 
         this.server = new JettyServer(serverOpts);
