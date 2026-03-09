@@ -29,16 +29,16 @@
         <plugins>
             <plugin>
                 <artifactId>maven-compiler-plugin</artifactId>
-                <version>3.14.1</version>
+                <version>3.15.0</version>
             </plugin>
             <plugin>
                 <groupId>io.jooby</groupId>
                 <artifactId>jooby-maven-plugin</artifactId>
-                <version>4.0.11</version>
+                <version>4.0.16</version>
             </plugin>
             <plugin>
                 <artifactId>maven-shade-plugin</artifactId>
-                <version>3.6.1</version>
+                <version>3.6.2</version>
                 <executions>
                     <execution>
                         <phase>package</phase>
@@ -71,14 +71,14 @@
             <dependency>
                 <groupId>io.jooby</groupId>
                 <artifactId>jooby-bom</artifactId>
-                <version>4.0.11</version>
+                <version>4.0.16</version>
                 <type>pom</type>
                 <scope>import</scope>
             </dependency>
             <dependency>
                 <groupId>software.amazon.awssdk</groupId>
                 <artifactId>bom</artifactId>
-                <version>2.40.13</version>
+                <version>2.42.9</version>
                 <type>pom</type>
                 <scope>import</scope>
             </dependency>
@@ -136,7 +136,7 @@
         <dependency>
             <groupId>org.xerial</groupId>
             <artifactId>sqlite-jdbc</artifactId>
-            <version>3.51.1.0</version>
+            <version>3.51.2.0</version>
         </dependency>
 
         <dependency>
