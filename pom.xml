@@ -29,16 +29,16 @@
         <plugins>
             <plugin>
                 <artifactId>maven-compiler-plugin</artifactId>
-                <version>3.14.1</version>
+                <version>3.15.0</version>
             </plugin>
             <plugin>
                 <groupId>io.jooby</groupId>
                 <artifactId>jooby-maven-plugin</artifactId>
-                <version>4.0.11</version>
+                <version>4.4.0</version>
             </plugin>
             <plugin>
                 <artifactId>maven-shade-plugin</artifactId>
-                <version>3.6.1</version>
+                <version>3.6.2</version>
                 <executions>
                     <execution>
                         <phase>package</phase>
@@ -71,14 +71,14 @@
             <dependency>
                 <groupId>io.jooby</groupId>
                 <artifactId>jooby-bom</artifactId>
-                <version>4.0.11</version>
+                <version>4.4.0</version>
                 <type>pom</type>
                 <scope>import</scope>
             </dependency>
             <dependency>
                 <groupId>software.amazon.awssdk</groupId>
                 <artifactId>bom</artifactId>
-                <version>2.40.13</version>
+                <version>2.42.37</version>
                 <type>pom</type>
                 <scope>import</scope>
             </dependency>
@@ -94,17 +94,17 @@
         <dependency>
             <groupId>org.apache.logging.log4j</groupId>
             <artifactId>log4j-core</artifactId>
-            <version>2.25.3</version>
+            <version>2.25.4</version>
         </dependency>
         <dependency>
             <groupId>org.apache.logging.log4j</groupId>
             <artifactId>log4j-slf4j2-impl</artifactId>
-            <version>2.25.3</version>
+            <version>2.25.4</version>
         </dependency>
         <dependency>
             <groupId>org.apache.logging.log4j</groupId>
             <artifactId>log4j-iostreams</artifactId>
-            <version>2.25.3</version>
+            <version>2.25.4</version>
         </dependency>
         <dependency>
             <groupId>com.lmax</groupId>
@@ -115,7 +115,7 @@
         <dependency>
             <groupId>com.google.guava</groupId>
             <artifactId>guava</artifactId>
-            <version>33.5.0-jre</version>
+            <version>33.6.0-jre</version>
         </dependency>
         <dependency>
             <groupId>com.google.code.gson</groupId>
@@ -136,7 +136,7 @@
         <dependency>
             <groupId>org.xerial</groupId>
             <artifactId>sqlite-jdbc</artifactId>
-            <version>3.51.1.0</version>
+            <version>3.53.0.0</version>
         </dependency>
 
         <dependency>
