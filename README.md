@@ -53,6 +53,8 @@ $ docker compose up
 
 You should then (hopefully!) be able to access the application at `http://localhost:3000/`.
 
+You can also deploy bytebin with one click using the official [Easypanel](https://easypanel.io/) template: https://easypanel.io/templates/bytebin
+
 ## API
 
 ### Read
