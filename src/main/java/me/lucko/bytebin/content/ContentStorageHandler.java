@@ -140,8 +140,9 @@ public class ContentStorageHandler implements CacheLoader<String, Content> {
      * Delete content.
      *
      * @param content the content to delete
+     * @return true if the entry was removed from the index
      */
-    public void delete(Content content) {
+    public boolean delete(Content content) {
         String key = content.getKey();
 
         // find the backend that the content is stored in
@@ -150,7 +151,7 @@ public class ContentStorageHandler implements CacheLoader<String, Content> {
         if (backend == null) {
             LOGGER.error("[STORAGE] Unable to delete " + key + " - no such backend '" + backendId + "'");
             Metrics.BACKEND_ERROR_COUNTER.labels(backendId, "delete").inc();
-            return;
+            return false;
         }
 
         Metrics.BACKEND_DELETE_COUNTER.labels(backendId).inc();
@@ -164,21 +165,32 @@ public class ContentStorageHandler implements CacheLoader<String, Content> {
         }
 
         // remove the entry from the index
-        this.index.remove(key);
+        if (!this.index.remove(key)) {
+            return false;
+        }
 
         LOGGER.info("[STORAGE] Deleted '" + key + "' from the '" + backendId + "' backend");
+        return true;
     }
 
     /**
      * Invalidates/deletes any expired content and updates the metrics gauges
      */
     public void runInvalidationAndRecordMetrics() {
-        // query the index for content which has expired
-        Collection<Content> expired = this.index.getExpired();
+        int batchSize = 1000;
 
-        for (Content metadata : expired) {
-            delete(metadata);
-        }
+        Collection<Content> expired;
+        int deleted;
+        do {
+            expired = this.index.getExpired(batchSize);
+            deleted = 0;
+            for (Content metadata : expired) {
+                if (delete(metadata)) {
+                    deleted++;
+                }
+            }
+            // stop on a partial batch, or if nothing could be deleted (avoids looping forever)
+        } while (expired.size() >= batchSize && deleted > 0);
 
         // update metrics
         this.index.recordMetrics();

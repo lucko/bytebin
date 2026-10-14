@@ -129,18 +129,20 @@ public class ContentIndexDatabase implements AutoCloseable {
         }
     }
 
-    public void remove(String key) {
+    public boolean remove(String key) {
         try (Histogram.Timer ignored = DURATION_HISTOGRAM_REMOVE.startTimer()) {
             this.dao.deleteById(key);
+            return true;
         } catch (SQLException e) {
             LOGGER.error("[INDEX DB] Error performing sql operation", e);
             Metrics.DB_ERROR_COUNTER.labels("remove").inc();
+            return false;
         }
     }
 
-    public Collection<Content> getExpired() {
+    public Collection<Content> getExpired(long max) {
         try (Histogram.Timer ignored = DURATION_HISTOGRAM_GET_EXPIRED.startTimer()) {
-            return this.dao.queryBuilder().where()
+            return this.dao.queryBuilder().limit(max).where()
                     .isNotNull("expiry")
                     .and()
                     .lt("expiry", new Date(System.currentTimeMillis()))
