@@ -187,6 +187,7 @@ public final class Bytebin implements AutoCloseable {
                 contentLoader,
                 this.logHandler,
                 metrics,
+                config.getBoolean(Option.ALLOW_MODIFICATION, true),
                 new RateLimitHandler(config.getStringList(Option.RATELIMIT_API_KEYS)),
                 /* POST rate limit */
                 new SimpleRateLimiter(

@@ -51,6 +51,8 @@ import org.apache.logging.log4j.Logger;
 
 import java.nio.file.Path;
 import java.time.Duration;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.CompletionException;
@@ -65,6 +67,7 @@ public class BytebinServer extends Jooby {
             ContentLoader contentLoader,
             LogHandler logHandler,
             boolean metrics,
+            boolean allowModification,
             RateLimitHandler rateLimitHandler,
             RateLimiter postRateLimiter,
             RateLimiter putRateLimiter,
@@ -123,26 +126,39 @@ public class BytebinServer extends Jooby {
 
         // define route handlers
         routes(() -> {
+            List<String> allowedHeaders = new ArrayList<>(List.of("Content-Type", "Accept", "Origin", "Content-Encoding", RateLimitHandler.HEADER_API_KEY, RateLimitHandler.HEADER_FORWARDED_IP));
+            if (allowModification) {
+                allowedHeaders.add(PostHandler.ALLOW_MODIFICATION_HEADER);
+            }
+
             use(new CorsHandler(new Cors()
                     .setUseCredentials(false)
                     .setMaxAge(Duration.ofDays(1))
                     .setMethods("POST", "PUT")
-                    .setHeaders("Content-Type", "Accept", "Origin", "Content-Encoding", "Allow-Modification", "Bytebin-Api-Key", "Bytebin-Forwarded-For")));
+                    .setHeaders(allowedHeaders)));
 
-            Route.Handler postHandler = new MetricsFilter("POST").then(new PostHandler(this, logHandler, postRateLimiter, rateLimitHandler, storageHandler, contentLoader, contentTokenGenerator, maxContentLength, expiryHandler, hostAliases));
+            Route.Handler postHandler = new MetricsFilter("POST").then(new PostHandler(this, logHandler, postRateLimiter, rateLimitHandler, storageHandler, contentLoader, contentTokenGenerator, maxContentLength, expiryHandler, hostAliases, allowModification));
             post("/post", postHandler);
             put("/post", postHandler);
         });
 
         routes(() -> {
+            List<String> allowedHeaders = new ArrayList<>(List.of("Content-Type", "Accept", "Origin", "Content-Encoding", RateLimitHandler.HEADER_API_KEY, RateLimitHandler.HEADER_FORWARDED_IP));
+            if (allowModification) {
+                allowedHeaders.add("Authorization");
+            }
+
             use(new CorsHandler(new Cors()
                     .setUseCredentials(false)
                     .setMaxAge(Duration.ofDays(1))
-                    .setMethods("GET", "PUT")
-                    .setHeaders("Content-Type", "Accept", "Origin", "Content-Encoding", "Authorization", "Bytebin-Api-Key", "Bytebin-Forwarded-For")));
+                    .setMethods(allowModification ? List.of("GET", "PUT") : List.of("GET"))
+                    .setHeaders(allowedHeaders)));
 
             get("/{id:[a-zA-Z0-9]+}", new MetricsFilter("GET").then(new GetHandler(this, logHandler, readRateLimiter, readNotFoundRateLimiter, rateLimitHandler, contentLoader)));
-            put("/{id:[a-zA-Z0-9]+}", new MetricsFilter("PUT").then(new UpdateHandler(this, logHandler, putRateLimiter, rateLimitHandler, storageHandler, contentLoader, maxContentLength, expiryHandler)));
+
+            if (allowModification) {
+                put("/{id:[a-zA-Z0-9]+}", new MetricsFilter("PUT").then(new UpdateHandler(this, logHandler, putRateLimiter, rateLimitHandler, storageHandler, contentLoader, maxContentLength, expiryHandler)));
+            }
         });
 
         routes(() -> {

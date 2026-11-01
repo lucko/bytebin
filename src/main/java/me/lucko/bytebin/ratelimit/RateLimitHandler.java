@@ -43,8 +43,8 @@ import java.util.Set;
  * address will be used for rate limiting purposes instead.
  */
 public final class RateLimitHandler {
-    private static final String HEADER_FORWARDED_IP = "Bytebin-Forwarded-For";
-    private static final String HEADER_API_KEY = "Bytebin-Api-Key";
+    public static final String HEADER_FORWARDED_IP = "Bytebin-Forwarded-For";
+    public static final String HEADER_API_KEY = "Bytebin-Api-Key";
 
     private final Set<String> apiKeys;
 

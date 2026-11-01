@@ -59,6 +59,8 @@ public final class PostHandler implements Route.Handler {
     /** Logger instance */
     private static final Logger LOGGER = LogManager.getLogger(PostHandler.class);
 
+    public static final String ALLOW_MODIFICATION_HEADER = "Allow-Modification";
+
     private final BytebinServer server;
     private final LogHandler logHandler;
     private final RateLimiter rateLimiter;
@@ -71,8 +73,9 @@ public final class PostHandler implements Route.Handler {
     private final long maxContentLength;
     private final ExpiryHandler expiryHandler;
     private final Map<String, String> hostAliases;
+    private final boolean allowModification;
 
-    public PostHandler(BytebinServer server, LogHandler logHandler, RateLimiter rateLimiter, RateLimitHandler rateLimitHandler, ContentStorageHandler storageHandler, ContentLoader contentLoader, TokenGenerator contentTokenGenerator, long maxContentLength, ExpiryHandler expiryHandler, Map<String, String> hostAliases) {
+    public PostHandler(BytebinServer server, LogHandler logHandler, RateLimiter rateLimiter, RateLimitHandler rateLimitHandler, ContentStorageHandler storageHandler, ContentLoader contentLoader, TokenGenerator contentTokenGenerator, long maxContentLength, ExpiryHandler expiryHandler, Map<String, String> hostAliases, boolean allowModification) {
         this.server = server;
         this.logHandler = logHandler;
         this.rateLimiter = rateLimiter;
@@ -84,6 +87,7 @@ public final class PostHandler implements Route.Handler {
         this.maxContentLength = maxContentLength;
         this.expiryHandler = expiryHandler;
         this.hostAliases = hostAliases;
+        this.allowModification = allowModification;
     }
 
     @Override
@@ -125,12 +129,12 @@ public final class PostHandler implements Route.Handler {
         }
 
         // check for our custom Allow-Modification header
-        boolean allowModifications = ctx.header("Allow-Modification").booleanValue(false);
-        String authKey;
-        if (allowModifications) {
-            authKey = this.authKeyTokenGenerator.generate();
+        boolean allowModification = this.allowModification && ctx.header(ALLOW_MODIFICATION_HEADER).booleanValue(false);
+        String modificationKey;
+        if (allowModification) {
+            modificationKey = this.authKeyTokenGenerator.generate();
         } else {
-            authKey = null;
+            modificationKey = null;
         }
 
         LOGGER.info("[POST]\n" +
@@ -176,7 +180,7 @@ public final class PostHandler implements Route.Handler {
 
             // add directly to the cache
             // it's quite likely that the file will be requested only a few seconds after it is uploaded
-            Content c = new Content(key, contentType, expiry, System.currentTimeMillis(), authKey != null, authKey, encoding, buf);
+            Content c = new Content(key, contentType, expiry, System.currentTimeMillis(), modificationKey != null, modificationKey, encoding, buf);
             future.complete(c);
 
             try {
@@ -189,8 +193,8 @@ public final class PostHandler implements Route.Handler {
         // return the url location as plain content
         ctx.setResponseCode(StatusCode.CREATED);
 
-        if (allowModifications) {
-            ctx.setResponseHeader("Modification-Key", authKey);
+        if (allowModification) {
+            ctx.setResponseHeader("Modification-Key", modificationKey);
         }
 
         if (ctx.getMethod().equals("PUT")) {
