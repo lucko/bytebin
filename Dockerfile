@@ -14,16 +14,14 @@ RUN mvn --no-transfer-progress -B package
 
 
 # --------------
-# RUN STAGE
+# RUNTIME BASE
 # --------------
-FROM eclipse-temurin:25-alpine
+FROM eclipse-temurin:25-alpine AS runtime
 
 RUN addgroup -S bytebin && adduser -S -G bytebin bytebin
 USER bytebin
 
-# copy app from build stage
 WORKDIR /opt/bytebin
-COPY --from=build-project /bytebin/target/bytebin.jar .
 
 # define a volume for the stored content
 RUN mkdir content logs db
@@ -36,3 +34,16 @@ HEALTHCHECK --interval=1m --timeout=5s \
 # run the app
 CMD ["java", "-jar", "bytebin.jar"]
 EXPOSE 8080/tcp
+
+
+# --------------
+# PREBUILT TARGET
+# --------------
+FROM runtime AS prebuilt
+COPY target/bytebin.jar .
+
+# --------------
+# DEFAULT TARGET
+# --------------
+FROM runtime
+COPY --from=build-project /bytebin/target/bytebin.jar .
