@@ -44,8 +44,6 @@ import me.lucko.bytebin.util.Metrics;
 import me.lucko.bytebin.util.TokenGenerator;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
-
-import javax.annotation.Nonnull;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
@@ -91,7 +89,7 @@ public final class PostHandler implements Route.Handler {
     }
 
     @Override
-    public String apply(@Nonnull Context ctx) {
+    public String apply(Context ctx) {
         byte[] content = getBodyAsByteArray(ctx, (int) this.maxContentLength);
 
         // ensure something was actually posted
