@@ -35,8 +35,6 @@ import me.lucko.bytebin.content.ContentStorageHandler;
 import me.lucko.bytebin.http.BytebinServer;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
-
-import javax.annotation.Nonnull;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Set;
@@ -62,7 +60,7 @@ public final class BulkDeleteHandler implements Route.Handler {
     }
 
     @Override
-    public CompletableFuture<Integer> apply(@Nonnull Context ctx) {
+    public CompletableFuture<Integer> apply(Context ctx) {
         String apiKey = ctx.header(HEADER_API_KEY).value("");
         if (apiKey.isEmpty() || !this.apiKeys.contains(apiKey)) {
             throw new StatusCodeException(StatusCode.UNAUTHORIZED, "API key is invalid");

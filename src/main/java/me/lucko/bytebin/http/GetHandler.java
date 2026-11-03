@@ -40,8 +40,6 @@ import me.lucko.bytebin.util.Metrics;
 import me.lucko.bytebin.util.TokenGenerator;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
-
-import javax.annotation.Nonnull;
 import java.io.IOException;
 import java.time.Instant;
 import java.util.List;
@@ -71,7 +69,7 @@ public final class GetHandler implements Route.Handler {
     }
 
     @Override
-    public CompletableFuture<byte[]> apply(@Nonnull Context ctx) {
+    public CompletableFuture<byte[]> apply(Context ctx) {
         // get the requested path
         String path = ctx.path("id").value();
         if (path.trim().isEmpty() || TokenGenerator.INVALID_TOKEN_PATTERN.matcher(path).find()) {
