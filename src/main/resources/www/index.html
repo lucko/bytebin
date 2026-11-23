@@ -87,17 +87,51 @@
             }
             xhr.send(compressed);
         }
+
+
+
+        function upload() {
+            let input = document.createElement("input");
+            input.type = "file";
+
+            input.onchange = async e => {
+                let file = e.target.files[0];
+
+                document.getElementById("upload-button").innerText = "[uploading...]";
+
+                let content = await file.text();
+                if (!content) {
+                    return
+                }
+
+                let compressed = pako.gzip(content)
+
+                let xhr = new XMLHttpRequest();
+                xhr.open("POST", "post", true);
+                xhr.setRequestHeader("Content-Type", file.type);
+                xhr.setRequestHeader("Content-Encoding", "gzip");
+                xhr.onreadystatechange = function() {
+                    if (this.readyState === XMLHttpRequest.DONE && this.status === 201) {
+                        window.location.href = JSON.parse(this.response).key;
+                    }
+                }
+                xhr.send(compressed);
+            }
+
+            input.click();
+        }
     </script>
 </head>
 
 <body>
 <div id="nav">
-    <a class="nav-left" onclick="submit()">[upload]</a>
+    <a class="nav-left" onclick="submit()">[save]</a>
+    <a class="nav-left" id="upload-button" onclick="upload()">[upload]</a>
     <a href="https://paste.lucko.me" target="_blank">[pasting code?]</a>
     <a href="https://github.com/lucko/bytebin" target="_blank">[about bytebin]</a>
 </div>
 <div id="content-wrapper">
-    <textarea autofocus id="content" spellcheck="false" placeholder="Type or paste your content here, then click 'upload'..."></textarea>
+    <textarea autofocus id="content" spellcheck="false" placeholder="Type or paste your content here, then click 'save'..."></textarea>
 </div>
 </body>
 </html>
